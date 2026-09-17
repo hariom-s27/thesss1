@@ -13,5 +13,14 @@ week1_thesis/fd6jq-osfstorage-Legacy-archive/
 /sep_week01/
 
 # ---- arpipe: its own git repo with its own GitHub remote (hariom-s27/arpipe) ----
+# arpipe-0.1.0 is the main checkout; the arpipe-pm*/arpipe-pb* dirs are its
+# git worktrees (one branch each, pushed to the arpipe remote directly).
 sep_week1/arpipe-0.1.0/
+sep_week1/arpipe-pb2-p1-recovery/
+sep_week1/arpipe-pm2-native-vs-ocr/
+sep_week1/arpipe-pm2.1-pagegrain/
+sep_week1/arpipe-pm2.2-sensitivity/
+sep_week1/arpipe-pm3-scan-quality/
+sep_week1/arpipe-pm4-annexure-audit/
+sep_week1/arpipe-pm5-coverage/
 sep_week1/.claude/
