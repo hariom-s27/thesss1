@@ -261,3 +261,17 @@ This document records the binding architectural, methodological, and governance 
 - **Alternatives considered:** Jump directly into designing another live crawling experiment or synthetic repair.
 - **Why chosen:** Historical evidence must always take precedence over contemporary speculation. If historical artifacts contain the failure layer, future experiments can target the exact failure mechanism. If insufficient evidence exists, the empirical boundary is formally closed and documented.
 - **Consequences:** The project advances to `HISTORICAL ACQUISITION-CAUSE EVIDENCE AUDIT` in read-only mode.
+
+---
+
+## 27. Historical Acquisition-Cause Evidence Audit Adjudication & Verdict
+- **Decision:** Formally accept and freeze the Historical Acquisition-Cause Evidence Audit findings as the definitive baseline of what is historically knowable about the 2026-09-11 acquisition gap (`DISCOVERED` &rarr; `DOWNLOADED`).
+- **Date:** 2026-09-18
+- **Evidence:** Dedicated worktree `arpipe-pr1x-historical-audit` commit `1b6fd1f496b3634ee57bef6b926f7a79524c1cac`. Reconstructed all 318 loss identities with 0 duplicates, 0 missing, 0 invented (`reports/historical_loss_ledger.csv`). Established 0.0% reason-code completeness across surviving 2026-09-11 records (`pm5_reason_code_completeness.csv` = 0.0%). Proved request invocation state is `REQUEST_NOT_CONFIRMED`. Discovered silent drop path in pre-R1 `fetch_one()` where repeated 403/429/503 encounters yielded silent `return None`. Cryptographic source hashes verified 100% preserved (`pre_hash == post_hash` across all 29 inspected source files).
+- **Alternatives considered:** (a) Postulate a specific failure mechanism (e.g. origin rate-limiting, IP blocking) based on contemporary P-C0 observations and design a targeted repair experiment; (b) Declare the 318 losses permanently unrecoverable without further empirical investigation.
+- **Why chosen:** Protocol Section 33 strictly prohibits inventing missing historical facts. With 0.0% reason codes and unconfirmed request invocation, designing a targeted repair or reproduction experiment claiming to test a specific historical mechanism is unguided speculation.
+- **Consequences:**
+  1. Next-experiment decision is bindingly adjudicated as **`INSUFFICIENT HISTORICAL EVIDENCE FOR TARGETED EXPERIMENT`**.
+  2. The project advances to an **`INFORMATION-GAP / OBSERVABILITY TASK`** (Roadmap Task 2: Evidence-Driven Acquisition Strategy).
+  3. Worktree `arpipe-pr1x-historical-audit` is declared permanently **FROZEN / READ-ONLY**.
+

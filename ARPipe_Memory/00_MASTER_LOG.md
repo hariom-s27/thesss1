@@ -35,9 +35,11 @@ flowchart TD
         OBSGAP --> R1["R1\nFailure Telemetry-Only Repair\n(Implementation & 15/15 Equivalence Matrix)"]
         R1 --> R1B["R1B\nProvenance Freeze & Closeout Verification\n(Final Commit 5649772 Verified)"]
         R1B --> R1FROZEN["R1 Frozen / Read-Only\n(Worktree Locked)"]
+        R1FROZEN --> PR1X["P-R1X Temporal Pilot\n(Valid W1+W2 Subset; Failure Unreproduced;\nHist. Cause Unknown)"]
+        PR1X --> HISTAUDIT["Historical Acquisition Audit\n(318 Losses Reconciled; 0.0% Reasons;\nTargeted Exp Insufficient Evidence)"]
     end
 
-    R1FROZEN --> NEXT["Post-R1 Acquisition Diagnosis\n(Current Active Phase: Dedicated New Worktree)"]
+    HISTAUDIT --> NEXT["Task 2: Evidence-Driven Acquisition Strategy\n(Classify Recoverable vs Excluded vs Unrecoverable)"]
 ```
 
 ---
@@ -387,3 +389,43 @@ flowchart TD
   11. *Overclaims Corrected:* Existing execution summary claims of "COMPLETED — ALL 3 WINDOWS EXECUTED", "zero variance across three windows", and "30/30 scheduled acquisitions" are corrected to reflect the valid two-window temporal subset and post-interruption supplemental data.
 - **Next Project Task:**
   - `HISTORICAL ACQUISITION-CAUSE EVIDENCE AUDIT`: Audit surviving historical artifacts from 2026-09-11 (logs, manifests, fetch records, HTTP traces) to determine the historical failure layer before contemplating any engineering repair.
+
+---
+
+## 2026-09-18: Historical Acquisition-Cause Evidence Audit
+- **Status:** `COMPLETE / ADJUDICATED HISTORICAL BASELINE`
+- **Investigation Mode:** `LOCAL / OFFLINE READ-ONLY HISTORICAL FORENSICS`
+- **Worktree:** `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-historical-audit` (branch `pr1x-historical-audit`)
+- **Base Commit SHA:** `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32` (P-R1X forensic adjudication commit)
+- **Commit SHA:** `1b6fd1f496b3634ee57bef6b926f7a79524c1cac` (`Historical audit: classify 2026-09-11 acquisition losses`)
+- **Objective:** Reconcile the authoritative 318 historical loss population from surviving 2026-09-11 artifacts, audit historical telemetry completeness, evaluate request invocation state, evaluate 11 failure mechanisms, answer all 17 required analytical questions, and render a binding next-experiment decision.
+- **Verdict:** `POPULATION RECONCILED (318/318) — HISTORICAL MECHANISMS UNKNOWN (0.0% REASONS PERSISTED) — INSUFFICIENT HISTORICAL EVIDENCE FOR TARGETED EXPERIMENT`
+- **Committed Deliverables (8):**
+  1. `reports/historical_loss_ledger.csv` (SHA-256: `95ba4a51...`, 318 loss rows, 100% locator references)
+  2. `reports/historical_evidence_register.csv` (SHA-256: `f5ee229c...`, 10 audited evidence items EV-HIST-01 to EV-HIST-10)
+  3. `reports/historical_configuration_snapshot.json` (SHA-256: `a91f8fb5...`, committed client parameters vs unrecorded runtime flags)
+  4. `reports/historical_hypothesis_matrix.csv` (SHA-256: `8938c5f5...`, 11 evaluated failure mechanisms)
+  5. `reports/historical_git_timeline.md` (SHA-256: `a3ff2f59...`, Sep 10–18 repository chronology)
+  6. `reports/historical_acquisition_cause_audit.json` (SHA-256: `a0f7dbb6...`, comprehensive machine-readable findings)
+  7. `reports/historical_acquisition_cause_audit.md` (SHA-256: `0a0349ca...`, full 11-section forensic report)
+  8. `reports/historical_audit_hashes.json` (SHA-256: `ea2cb555...`, pre vs post cryptographic verification across all 29 sources)
+- **Cryptographic Chain of Custody:**
+  - 29 historical source artifacts inspected across 7 worktrees/directories.
+  - Verification: `pre_hash == post_hash` across 100% of inspected sources (29 of 29 files unchanged).
+  - Source integrity status: `ALL_SOURCE_HASHES_PRESERVED_UNCOMPROMISED`.
+- **Key Forensic Findings:**
+  1. *Population Identity Reconciliation: EXACT (318 of 318).* Reconstructed directly from `reports/pm5_stage_table.csv` and cross-referenced to `cohort_reports.jsonl`. 318 unique observations, 0 duplicates, 0 missing, 0 invented. Reconciles: 576 expected - 64 undiscovered = 512 discovered - 194 downloaded = exactly 318 losses.
+  2. *Historical Reason-Code Completeness: EXACTLY 0.0% (0 of 318).* Zero HTTP status codes, socket exceptions, or retry traces survive for the 318 losses (`pm5_reason_code_completeness.csv` = 0.0%). All 318 are recorded as `REASON_CODE_MISSING`.
+  3. *Request Invocation State: `REQUEST_NOT_CONFIRMED`.* In accordance with mandatory epistemic rule `NO_REQUEST_EVIDENCE != REQUEST_DID_NOT_OCCUR`, candidate URLs were discovered, but no record confirms whether HTTP requests were actually dispatched for the 318 losses.
+  4. *The Silent Drop Path:* In pre-R1 `arpipe/fetch.py:fetch_one()`, encountering 403/429/503 across all 3 retries executed `time.sleep()` and `continue` without setting `last_err`, silently executing `return None` with zero stderr prints and zero disk records.
+  5. *Intermediate Manifest Discovery:* `cohort_fetch_manifest.jsonl` was written at 10:28:22 UTC on 2026-09-11 (22 seconds before first download began at 10:28:44 UTC) containing 460 rows covering **exactly the 194 successful pairs** and **omitting all 318 losses**. Whether it served as an input filter or was exported post-hoc cannot be proven due to absence of shell transcripts (`PLAUSIBLE_BUT_UNPROVEN`).
+  6. *Hypotheses Ruled Out:* Payload corruption (ruled out on tested sample: 100% valid ZIP/PDF with matching magic bytes and CAS hashes); URL malformation (ruled out: all 318 have valid regulatory paths); client configuration asymmetry (ruled out as technical barrier: P-C0R proved 10/10 paired success; P-R1X succeeded 20/20 unadorned).
+  7. *Hypotheses Plausible but Unproven:* Upstream CDN rate-limiting/resets; workflow invocation gap; silent drop on 403/429/503; concurrency burst triggering origin bot defenses; retry exhaustion.
+- **Next-Experiment Decision:**
+  - **Verdict:** **`INSUFFICIENT HISTORICAL EVIDENCE FOR TARGETED EXPERIMENT`**
+  - **Rationale:** A targeted repair or reproduction experiment claiming to test a specific historical failure mechanism cannot be designed without unguided speculation and invention of unrecorded historical facts.
+- **Next Project Task:**
+  - **Task Identifier:** `Task 2 (Evidence-Driven Acquisition Strategy: Classify Recoverable vs. Excluded vs. Unrecoverable)`
+  - **Task Nature:** `INFORMATION-GAP / OBSERVABILITY TASK`
+  - **Objective:** Deploy structured R1 attempt-level telemetry across the full 318 un-downloaded cohort to systematically categorize each company-year into: Category A (Recoverable Technical Gaps), Category B (Systematic URL/Parser Defects), or Category C (Genuine Archival Unavailability).
+

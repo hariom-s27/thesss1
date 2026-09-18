@@ -35,17 +35,17 @@ This register catalogues all Git worktrees, forensic directories, and experiment
 | `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-step0b-recovery` | *N/A (recovery dir)* | Target: `0fb8cbf6d932f4190bdfe3b2a1fecf62170cca14` | Step 0B blocker quantification | **HALTED** (Mandatory stop receipt recorded) | **READ-ONLY** | Halted. Do not modify. |
 | `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-execution` | `pr1x-execution` | Base: `56497721cb68c4831e6f225074b6bd7ea17bffb0`<br>Final: `0b1d595407eacb13b115811cdb610b3e1f56a767` | P-R1X: Instrumented acquisition telemetry pilot (execution) | **COMPLETED PILOT / READ-ONLY** | **READ-ONLY** | **STRICTLY READ-ONLY**. Completed pilot execution. Preserved untouched. |
 | `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-adjudication` | `pr1x-adjudication` | Base: `0b1d595407eacb13b115811cdb610b3e1f56a767`<br>Final: `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32` | P-R1X: Forensic adjudication & protocol compliance audit | **COMPLETED ADJUDICATION / READ-ONLY** | **READ-ONLY** | **STRICTLY READ-ONLY**. Contains 5 committed adjudication reports and hash manifests. |
+| `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-historical-audit` | `pr1x-historical-audit` | Base: `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`<br>Final: `1b6fd1f496b3634ee57bef6b926f7a79524c1cac` | Historical Acquisition-Cause Evidence Audit | **COMPLETED AUDIT / READ-ONLY** | **READ-ONLY** | **STRICTLY READ-ONLY**. Contains 8 committed audit reports and cryptographic manifests. |
 
 ---
 
-## Next Task: Historical Acquisition-Cause Evidence Audit
-- **Target Task:** **Historical Acquisition-Cause Evidence Audit**
-- **Operational Mode:** **READ-ONLY EVIDENCE AUDIT** across surviving repository artifacts, logs, manifests, and command outputs.
+## Next Task: Task 2 — Evidence-Driven Acquisition Strategy
+- **Target Task:** **Task 2: Evidence-Driven Acquisition Strategy**
+- **Operational Mode:** **INFORMATION-GAP / OBSERVABILITY TASK** (Deploy structured R1 telemetry across the 318 un-downloaded cohort).
 - **Reference Commits:**
   - Engineering Base: `56497721cb68c4831e6f225074b6bd7ea17bffb0`
-  - Execution Commit: `0b1d595407eacb13b115811cdb610b3e1f56a767`
-  - Adjudication Commit: `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`
-- **Rule:** Any future engineering task requiring code modification must provision a NEW dedicated worktree. Existing completed worktrees remain strictly read-only.
+  - Historical Audit Baseline: `1b6fd1f496b3634ee57bef6b926f7a79524c1cac`
+- **Rule:** Any future engineering task requiring code execution must provision a NEW dedicated worktree. Existing completed worktrees remain strictly read-only.
 
 ---
 
