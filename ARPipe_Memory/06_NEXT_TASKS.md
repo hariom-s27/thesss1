@@ -8,6 +8,8 @@ This document defines the prioritized task sequence for the ARPipe thesis projec
 
 ```mermaid
 flowchart TD
+    T0["P-R1X Execution & Adjudication\n(COMPLETE / ADJUDICATED)\n2 Valid Windows (20/20) + 1 Supplemental (10/10)\nFailure Not Reproduced; Hist. Cause UNKNOWN"] --> T1["NEXT TASK (IMMEDIATE)\nHistorical Acquisition-Cause Evidence Audit\n(Search Surviving Logs, Manifests, Traces)"]
+    T1 --> T2["Task 2\nEvidence-Driven Acquisition Strategy\n(Classify: Recoverable vs. Excluded vs. Unrecoverable)"]
     T0["P-R1X Execution & Adjudication\n(COMPLETE / ADJUDICATED)\n2 Valid Windows (20/20) + 1 Supplemental (10/10)\nFailure Not Reproduced; Hist. Cause UNKNOWN"] --> T1["Historical Acquisition-Cause Evidence Audit\n(COMPLETE / AUDITED)\n318 Losses Reconciled; 0.0% Reasons;\nTargeted Exp Insufficient Evidence"]
     T1 --> T2["NEXT TASK (IMMEDIATE)\nTask 2: Evidence-Driven Acquisition Strategy\n(Classify: Recoverable vs. Excluded vs. Unrecoverable)"]
     T2 --> T3["Task 3\nExecute Acquisition Resolution &\nFreeze Universe V2 Manifest"]
@@ -17,9 +19,31 @@ flowchart TD
 
 ---
 
+## NEXT TASK: Historical Acquisition-Cause Evidence Audit
 ## COMPLETED TASK: Historical Acquisition-Cause Evidence Audit
 
 - **Task Identifier:** `HISTORICAL-AUDIT`
+- **Objective:** Search surviving historical artifacts across the thesis repository and historical run directories for evidence that can classify the 2026-09-11 discovered $\rightarrow$ downloaded losses (318 lost documents).
+- **Search Targets:**
+  1. Historical run logs and stdout/stderr dumps
+  2. Historical discovery manifests and URL inventories
+  3. Historical fetch logs, cache files, and store logs
+  4. Prior telemetry files and timestamped outputs
+  5. HTTP status code records, headers, or server responses
+  6. Python exception traces and crash logs
+  7. Preserved run summaries, reports, and command logs
+  8. Historical experiment artifacts across `sep_week1` and `thesis` root
+- **Methodological Priority:** **Historical evidence FIRST.**
+  - Do NOT jump directly to an acquisition repair.
+  - Do NOT infer the historical cause from current pilot success.
+  - If sufficient evidence exists: design the next diagnostic or resolution experiment directly from the identified failure evidence.
+  - If insufficient evidence exists: explicitly record the empirical information gap in project memory.
+- **Operating Mode:** Read-only historical investigation. No live network requests. No production code modifications.
+- **Reference Artifacts & Hashes:**
+  - P-R1X Adjudication Report: `reports/pr1x_adjudication.md`
+  - P-R1X Adjudication SHA: `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`
+  - Original 10-Obs Manifest: `reports/pc0_sample_manifest.json` (SHA: `394c628d...`)
+  - Historical Stage Table: `reports/pm5_stage_table.csv` (SHA: `30e93b59...`)
 - **Status:** **COMPLETE / ADJUDICATED HISTORICAL BASELINE**
 - **Audit Worktree:** `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-historical-audit` (branch `pr1x-historical-audit`)
 - **Audit Commit SHA:** `1b6fd1f496b3634ee57bef6b926f7a79524c1cac`
@@ -35,8 +59,11 @@ flowchart TD
 
 ---
 
+## Task 2: Evidence-Driven Acquisition Strategy
 ## NEXT TASK (IMMEDIATE): Task 2 — Evidence-Driven Acquisition Strategy
 
+
+- **Objective:** Analyze comprehensive telemetry to classify all 318 un-downloaded company-years into three definitive categories:
 - **Task Identifier:** `Task 2` (Information-Gap / Observability Task)
 - **Objective:** Deploy structured R1 attempt-level telemetry across the full 318 un-downloaded cohort to systematically categorize each company-year into three definitive categories:
   1. **Category A (Recoverable Technical Gaps):** Missing documents that succeed under appropriate network pacing, unblocked windows, or minimal verified adjustments.

@@ -24,3 +24,19 @@ sep_week1/arpipe-pm3-scan-quality/
 sep_week1/arpipe-pm4-annexure-audit/
 sep_week1/arpipe-pm5-coverage/
 sep_week1/.claude/
+
+# ---- more arpipe git worktrees (branches live on the arpipe remote) ----
+sep_week1/arpipe-extraction-corpus-freeze/
+sep_week1/arpipe-pc0-coverage-diag/
+sep_week1/arpipe-pc0-diagnostic-base/
+sep_week1/arpipe-pc0r-acquisition-pilot/
+sep_week1/arpipe-pr1x-*/
+sep_week1/arpipe-r1-*/
+sep_week1/arpipe-step0*/
+sep_week1/arpipe-t0.*/
+
+# ---- scratch / caches / installers ----
+.pytest_tmp/
+sep_week1/.firecrawl/
+sep_week2/*.exe
+ARPipe_Memory_update_*.zip

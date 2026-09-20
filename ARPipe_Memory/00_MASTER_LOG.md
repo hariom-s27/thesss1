@@ -39,6 +39,7 @@ flowchart TD
         PR1X --> HISTAUDIT["Historical Acquisition Audit\n(318 Losses Reconciled; 0.0% Reasons;\nTargeted Exp Insufficient Evidence)"]
     end
 
+    R1FROZEN --> NEXT["Post-R1 Acquisition Diagnosis\n(Current Active Phase: Dedicated New Worktree)"]
     HISTAUDIT --> NEXT["Task 2: Evidence-Driven Acquisition Strategy\n(Classify Recoverable vs Excluded vs Unrecoverable)"]
 ```
 

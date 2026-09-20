@@ -1,26 +1,48 @@
 # ARPipe — Current Project State
 
+**Last Updated:** 2026-09-17
 **Last Updated:** 2026-09-18  
 **Vault Root:** `D:\sem_iitk\sem9\thesis\ARPipe_Memory`
 
 ---
 
 ## 1. What phase are we in?
+**POST-P-R1X FORENSIC CLOSEOUT / HISTORICAL CAUSE AUDIT**
 **POST-HISTORICAL-AUDIT / INFORMATION-GAP STRATEGY**
 
+P-R1X v1.2 execution has been forensically adjudicated against the frozen protocol and Runbook Section 10 Interruption Rule.
 The Historical Acquisition-Cause Evidence Audit has concluded across surviving 2026-09-11 artifacts in dedicated worktree `arpipe-pr1x-historical-audit`.
 
 > [!IMPORTANT]
+> **GOVERNING ADJUDICATION STATEMENT:**  
+> P-R1X did not produce a clean three-window temporal experiment. It produced a valid two-window primary temporal subset plus a post-interruption supplemental observation run.
 > **GOVERNING AUDIT STATEMENT:**  
 > The 318 historical loss population has been 100% reconstructed and reconciled against discovery manifests. However, surviving 2026-09-11 records preserve **0.0% reason codes** (0 of 318). Request invocation state is **`REQUEST_NOT_CONFIRMED`**. Designing a targeted repair experiment without physical failure telemetry would constitute unguided speculation. The project advances to an **INFORMATION-GAP / OBSERVABILITY TASK** (Task 2).
 
+We are now in the post-adjudication memory closeout phase, transitioning to the Historical Acquisition-Cause Evidence Audit.
 We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classifying the 318 un-downloaded pairs under structured R1 telemetry).
 
 ---
 
 ## 2. What was the last completed task?
+**P-R1X: Forensic Adjudication & Memory Closeout**
 **Historical Acquisition-Cause Evidence Audit**
 
+- **Task Status:** **COMPLETE / ADJUDICATED**
+- **Experimental Status:** `INCOMPLETE AS A THREE-WINDOW TEMPORAL EXPERIMENT (VALID TWO-WINDOW PRIMARY SUBSET + POST-INTERRUPTION SUPPLEMENTAL DATA)`
+- **Protocol Version:** `P-R1X v1.2`
+- **Adjudication Worktree:** `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-adjudication` (branch `pr1x-adjudication`)
+- **Adjudication Commit SHA:** `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`
+- **Execution Worktree:** `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-execution` (branch `pr1x-execution`, UNTOUCHED)
+- **Execution Commit SHA:** `0b1d595407eacb13b115811cdb610b3e1f56a767`
+- **Engineering Base SHA:** `56497721cb68c4831e6f225074b6bd7ea17bffb0` (Frozen R1 Implementation)
+- **Analytical Reference SHA:** `3beee249db36f9fdd1a8a2e01d6fdc3c6024d870`
+- **Committed Adjudication Artifacts:**
+  - `reports/pr1x_adjudication.md` (Full forensic report with all 18 required sections)
+  - `reports/pr1x_adjudication.json` (Machine-readable comprehensive adjudication findings)
+  - `reports/pr1x_temporal_validity.json` (Per-window validity classifications: W1 VALID, W2 VALID, W3 POST_INTERRUPTION_SUPPLEMENTAL)
+  - `reports/pr1x_memory_update_notes.md` (Memory reconciliation specifications)
+  - `reports/pr1x_artifact_hashes.json` (Canonical SHA-256 manifests of execution and adjudication files)
 - **Task Status:** **COMPLETE / ADJUDICATED HISTORICAL BASELINE**
 - **Investigation Mode:** `LOCAL / OFFLINE READ-ONLY HISTORICAL FORENSICS`
 - **Audit Worktree:** `D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-historical-audit` (branch `pr1x-historical-audit`)
@@ -36,6 +58,13 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
   - `reports/historical_hypothesis_matrix.csv` (Evaluation of 11 failure mechanisms)
   - `reports/historical_audit_hashes.json` (Pre- vs post-audit verification across all 29 sources)
 - **Key Evidence Established:**
+  - *Window 1:* VALID (Started on schedule: 2026-09-17 20:05:00.001 UTC; delay 1.4ms; 10/10 success).
+  - *Window 2:* VALID (Started on schedule: 2026-09-17 21:35:00.002 UTC; delay 2.1ms; 10/10 success).
+  - *Window 3:* POST_INTERRUPTION_SUPPLEMENTAL (Delayed by 9h 12m 46s due to host sleep / process suspension during nominal inter-window wait loop; resumed 2026-09-18 08:17:46 UTC; 10/10 success).
+  - *Primary Temporal Analysis:* 20 observations across valid Windows 1 and 2 (10 target, 10 control; 100% success; 0 difference; bitwise-identical SHA-256 CAS blob payloads).
+  - *Supplemental Dataset:* 10 observations from Window 3 retained separately as descriptive current-access evidence.
+  - *Historical Causality:* UNKNOWN / NOT ESTABLISHED. Historical failure mode (`downloaded=False`) was NOT REPRODUCED.
+  - *Future Repair-Experiment Decision:* `INSUFFICIENT EVIDENCE` (No failure to repair; unguided speculation avoided; problem not declared solved).
   - *Population Reconciled:* Exactly 318 historical losses (576 expected - 64 undiscovered = 512 discovered - 194 downloaded = 318 losses). Exactly 318 unique identities, 0 duplicates, 0 missing, 0 invented.
   - *Reason-Code Completeness:* Exactly 0.0% (0 of 318). All 318 recorded as `REASON_CODE_MISSING`.
   - *Request Invocation State:* `REQUEST_NOT_CONFIRMED` under `NO_REQUEST_EVIDENCE != REQUEST_DID_NOT_OCCUR`.
@@ -62,6 +91,8 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
    - `mda_located = 0`: 9 fiscal years (`downloaded=0` + FY2015)
    - `accepted = 0`: 10 fiscal years (`mda_located=0` + FY2011)
    - Nested relationship: `downloaded=0` ⊂ `mda_located=0` ⊂ `accepted=0`.
+3. **Pre-Fetch Filter Ruled Out (P-C0):**
+   - `cohort_fetch_manifest.jsonl` (194 rows) is a post-hoc store export derived from already-successful downloads, not an input filter.
 3. **Intermediate Manifest Characterization (Historical Audit):**
    - `cohort_fetch_manifest.jsonl` was written at 10:28:22 UTC on 2026-09-11 (22s before the first download began). It contains 460 candidate rows covering **exactly the 194 successful download pairs** and omits all 318 losses. In the absence of shell transcripts, whether `cmd_fetch` targeted this manifest or whether it was exported post-hoc remains `PLAUSIBLE_BUT_UNPROVEN`.
 4. **Current Access Variation Observed (P-C0 / P-C0R):**
@@ -108,6 +139,7 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
 
 ## 4. What remains unknown?
 1. **Historical Cause of 2026-09-11 Losses:**
+   - The root cause of the 318 historical discovered $\rightarrow$ downloaded losses on 2026-09-11 remains strictly **UNKNOWN / NOT ESTABLISHED**. Surviving historical records contain 0.0% reason codes.
    - The root cause of the 318 historical discovered $\rightarrow$ downloaded losses on 2026-09-11 remains strictly **UNKNOWN / NOT ESTABLISHED**. Surviving historical records contain 0.0% reason codes, and request invocation cannot be proven or disproven (`REQUEST_NOT_CONFIRMED`).
 2. **Failure Reproducibility:**
    - Whether the historical failure mode can be reproduced at all under any controlled contemporary conditions.
@@ -115,6 +147,8 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
    - Whether periodic maintenance, time-of-day policies, or market-hours access rules exist that were not captured by the two valid windows.
 4. **Concurrency & Scale Effects:**
    - How origin behaves under multi-worker high concurrency or full-universe (576 company-years) crawling compared to the polite single-worker pilot.
+5. **Historical Failure Layer Classification:**
+   - Whether surviving unindexed logs or external artifacts can classify whether failures occurred at L1 (Connect), L3 (HTTP status), or L4 (Receipt).
 5. **Categorization of the 318 Losses (Recoverable vs Excluded vs Unrecoverable):**
    - Which specific company-years among the 318 are technically recoverable under R1 vs genuine archival non-existence.
 
@@ -122,6 +156,7 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
 
 ## 5. What is the current blocker?
 1. **Universe V2 Cannot Be Frozen:**
+   - Universe V2 and downstream gold-standard validation (F1 → F2 → F3) are blocked until the 318-observation acquisition loss is diagnosed and resolved.
    - Universe V2 and downstream gold-standard validation (F1 → F2 → F3) are blocked until the 318-observation acquisition loss is categorized and resolved.
 2. **P-B2 Phase 2R / P-C2 Clean Rerun Blocked:**
    - P-B2 Phase 1 baseline was partially lost due to shared-worktree corruption. A clean rerun requires a stable acquisition state and frozen Universe V2.
@@ -129,8 +164,24 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
 ---
 
 ## 6. What is the exact next task?
+**HISTORICAL ACQUISITION-CAUSE EVIDENCE AUDIT**
 **Task 2: Evidence-Driven Acquisition Strategy**
 
+- **Task Identifier:** `HISTORICAL-AUDIT`
+- **Objective:** Search surviving historical artifacts across the thesis repository and logs for evidence that can classify the 2026-09-11 discovered $\rightarrow$ downloaded losses.
+- **Search Scope:**
+  - Historical logs and terminal outputs
+  - Discovery manifests and store logs
+  - Prior telemetry and fetch records
+  - Preserved HTTP status records and error messages
+  - Preserved command outputs, cached artifacts, and run summaries
+  - Historical experiment worktree logs
+- **Priority:** **Historical evidence FIRST.**
+  - Do NOT jump directly to an acquisition repair.
+  - Do NOT infer the historical cause from current pilot success.
+  - If sufficient evidence exists: design the next experiment from the identified evidence.
+  - If insufficient evidence exists: record the information gap explicitly in project memory.
+- **Rules:** Read-only historical investigation. No live network requests. No production code changes.
 - **Task Identifier:** `Task 2` (Information-Gap / Observability Task)
 - **Objective:** Deploy structured R1 attempt-level telemetry across the full 318 un-downloaded cohort to systematically categorize each company-year into:
   - **Category A (Recoverable Technical Gaps):** Missing documents that succeed under instrumented acquisition.
@@ -141,23 +192,34 @@ We are now transitioning to Task 2: Evidence-Driven Acquisition Strategy (classi
 ---
 
 ## 7. Which worktree should be used?
+**Dedicated adjudication worktree:**
+`D:\sem_iitk\sem9\thesis\sep_week1\arpipe-pr1x-adjudication` (branch `pr1x-adjudication`, commit `ca92b8e`)
 **Dedicated new worktree for Task 2:**
 Must be provisioned as a NEW dedicated worktree branched from engineering base `56497721cb68c4831e6f225074b6bd7ea17bffb0` (or inheriting audited state from `ca92b8e` / `1b6fd1f`).
 
 > [!CRITICAL]
+> The worktrees `arpipe-r1-fetch-telemetry`, `arpipe-r1-telemetry-analysis`, and `arpipe-pr1x-execution` are **PERMANENTLY FROZEN / READ-ONLY**.
+> The historical evidence audit operates in read-only mode across surviving repository artifacts.
 > All prior worktrees (`arpipe-r1-fetch-telemetry`, `arpipe-r1-telemetry-analysis`, `arpipe-pr1x-execution`, `arpipe-pr1x-adjudication`, and `arpipe-pr1x-historical-audit`) are **PERMANENTLY FROZEN / READ-ONLY**.
 
 ---
 
 ## 8. Which base SHA should be used?
 **`56497721cb68c4831e6f225074b6bd7ea17bffb0`** (Frozen R1 Implementation)  
+Current Adjudication HEAD: **`ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`** (branch `pr1x-adjudication`).
 Historical Audit Commit: **`1b6fd1f496b3634ee57bef6b926f7a79524c1cac`** (branch `pr1x-historical-audit`).
+
+Verified lineage:
+`0fb8cbf6d932f4190bdfe3b2a1fecf62170cca14` → `56497721cb68c4831e6f225074b6bd7ea17bffb0` (R1 implementation)
+*(Note: Commit `3beee249db36f9fdd1a8a2e01d6fdc3c6024d870` contains analysis reports and protocol design only; it is not the engineering base).*
+
 
 ---
 
 ## 9. Which files/worktrees must not be touched?
 1. **`D:\sem_iitk\sem9\thesis\sep_week1\arpipe-0.1.0`** (Permanent read-only forensic evidence; MUST NOT BE TOUCHED).
 2. **`D:\sem_iitk\sem9\thesis\sep_week1\arpipe-r1-fetch-telemetry`** (**FROZEN / READ-ONLY**; permanent milestone record; MUST NOT BE TOUCHED).
+3. **All Completed Experiment Worktrees (Read-Only):**
 3. **All Completed Experiment / Analysis Worktrees (Read-Only):**
    - `arpipe-pb2-p1-recovery`
    - `arpipe-pc0-coverage-diag`

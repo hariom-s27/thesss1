@@ -39,11 +39,17 @@ This register catalogues all Git worktrees, forensic directories, and experiment
 
 ---
 
+## Next Task: Historical Acquisition-Cause Evidence Audit
+- **Target Task:** **Historical Acquisition-Cause Evidence Audit**
+- **Operational Mode:** **READ-ONLY EVIDENCE AUDIT** across surviving repository artifacts, logs, manifests, and command outputs.
 ## Next Task: Task 2 — Evidence-Driven Acquisition Strategy
 - **Target Task:** **Task 2: Evidence-Driven Acquisition Strategy**
 - **Operational Mode:** **INFORMATION-GAP / OBSERVABILITY TASK** (Deploy structured R1 telemetry across the 318 un-downloaded cohort).
 - **Reference Commits:**
   - Engineering Base: `56497721cb68c4831e6f225074b6bd7ea17bffb0`
+  - Execution Commit: `0b1d595407eacb13b115811cdb610b3e1f56a767`
+  - Adjudication Commit: `ca92b8e8d043cccb9556a6fc591927b3bbf1cf32`
+- **Rule:** Any future engineering task requiring code modification must provision a NEW dedicated worktree. Existing completed worktrees remain strictly read-only.
   - Historical Audit Baseline: `1b6fd1f496b3634ee57bef6b926f7a79524c1cac`
 - **Rule:** Any future engineering task requiring code execution must provision a NEW dedicated worktree. Existing completed worktrees remain strictly read-only.
 

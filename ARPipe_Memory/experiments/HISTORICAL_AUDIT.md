@@ -123,3 +123,4 @@ The 8 authoritative audit deliverables are permanently committed in `1b6fd1f496b
 6. `reports/historical_acquisition_cause_audit.json` (SHA: `9e1233a0e0cc...`, 10,651 bytes)
 7. `reports/historical_acquisition_cause_audit.md` (SHA: `3294afc37ddb...`, 23,518 bytes)
 8. `reports/historical_audit_hashes.json` (SHA: `eef359b0017d...`, 12,830 bytes)
+

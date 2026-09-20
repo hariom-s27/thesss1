@@ -10,11 +10,18 @@ This register documents active technical ambiguities, open research questions, a
 > **Epistemic Principle:** P-R1X verified current endpoint reachability and client viability under single-worker polite pacing. It did **not** reproduce the historical failure and does **not** recover historical failure data. The historical cause of the 318 losses remains strictly **UNKNOWN / NOT ESTABLISHED** and open.
 
 ### OQ-ACQ-1: What caused the historical 2026-09-11 discovered $\rightarrow$ downloaded losses?
+- **Status:** OPEN / UNKNOWN / NOT ESTABLISHED
+- **Current Evidence:** The historical cause of the 2026-09-11 acquisition losses (318 lost documents) cannot be established from the surviving evidence. All 194 historical successful downloads completed within ~4.5 minutes (10:28:44–10:33:08 UTC). No error logs or attempt telemetry were persisted for the 318 un-downloaded pairs.
+- **P-R1X Finding:** In P-R1X, all 10 pilot URLs (5 target zero-download FYs + 5 controls) succeeded 100% (20/20 in valid windows, 10/10 supplemental) without custom headers or cookies. Current success does NOT retroactively explain historical failure.
+- **Resolution Path:** Perform a systematic audit of surviving historical artifacts (`HISTORICAL ACQUISITION-CAUSE EVIDENCE AUDIT`) to inspect raw logs, manifests, and command traces from 2026-09-11.
 - **Status:** CLOSED — PERMANENT HISTORICAL INFORMATION GAP ESTABLISHED
 - **Historical Audit Finding:** The Historical Acquisition-Cause Evidence Audit (commit `1b6fd1f496b3634ee57bef6b926f7a79524c1cac`) established that surviving records contain exactly **0.0% reason codes** (0 of 318). Request invocation state is **`REQUEST_NOT_CONFIRMED`** under `NO_REQUEST_EVIDENCE != REQUEST_DID_NOT_OCCUR`. Pre-R1 code silently dropped repeated 403/429/503 errors without setting `last_err` or logging to disk. What physically occurred on 2026-09-11 is historically unknowable from surviving evidence.
 - **Resolution:** Formally closed with finding `UNKNOWN_AFTER_REVIEW`. Advances to Task 2 (Information-Gap / Observability Task) to classify the 318 cohort under structured R1 telemetry.
 
 ### OQ-ACQ-2: Can the historical failure condition be reproduced?
+- **Status:** OPEN / UNREPRODUCED UNDER CURRENT TEST CONDITIONS
+- **Context:** P-C0R (50/50 success) and P-R1X (20/20 valid success, 10/10 supplemental success) both failed to reproduce any acquisition failure under polite pacing (`min_interval=1.5`s) and standard `httpx.Client`. It remains unknown whether the historical failure state can be reproduced under any controlled contemporary conditions.
+- **Resolution Path:** First audit historical logs to identify the failure layer. If historical evidence indicates a specific condition (e.g. market-hours blocking, concurrency burst, or specific upstream outage), design a targeted, pre-registered diagnostic protocol.
 - **Status:** CLOSED — INSUFFICIENT HISTORICAL EVIDENCE FOR TARGETED EXPERIMENT
 - **Context:** P-C0R (50/50 success) and P-R1X (20/20 valid success, 10/10 supplemental success) failed to reproduce any acquisition failure under polite pacing (`min_interval=1.5`s) and standard `httpx.Client`.
 - **Historical Audit Decision:** With 0.0% reason codes and unconfirmed request invocation, designing a targeted reproduction or repair experiment claiming to test a specific historical mechanism is unguided speculation (`INSUFFICIENT HISTORICAL EVIDENCE FOR TARGETED EXPERIMENT`).
@@ -33,6 +40,9 @@ This register documents active technical ambiguities, open research questions, a
 - **Resolution Path:** Evaluate concurrency dependencies only after completing the historical artifact audit and establishing historical baseline parameters.
 
 ### OQ-ACQ-5: Can surviving historical logs or external evidence classify the historical failure layer?
+- **Status:** OPEN (Active focus of Next Task)
+- **Context:** R1 establishes an architectural failure-layer taxonomy: L0 DNS, L1 Connect, L2 TLS, L3 HTTP status (403/429/503), L4 Receipt timeout, L5 Classification, L6 Validation. Historical reason codes were 0.0% in primary stage tables, but raw run artifacts, logs, discovery manifests, stderr dumps, or shell histories may contain unindexed failure traces.
+- **Resolution Path:** Execute the `HISTORICAL ACQUISITION-CAUSE EVIDENCE AUDIT` across all preserved repository files, archive directories, and historical runs to search for surviving error traces from 2026-09-11.
 - **Status:** CLOSED — COMPLETED AUDIT (0.0% HISTORICAL COVERAGE)
 - **Historical Audit Finding:** All 29 surviving historical source artifacts across the repository, worktrees, and cache stores were inventoried and hashed (`pre_hash == post_hash`). Exactly 0 HTTP status codes, socket exceptions, or terminal error logs survive. Reason-code completeness is 0.0%.
 - **Resolution:** Confirmed that historical logging was strictly unpersisted (stderr only, or silent drop in `fetch_one`). All 318 losses recorded as `REASON_CODE_MISSING` / `UNKNOWN_AFTER_REVIEW`. Sealed permanently in Decision 27.
