@@ -146,6 +146,14 @@ topic_seeds:
     - "ice product"
 
 discovery:
+  corpus: full            # full | sample. `--stage discover` uses this; `--stage discover --sample`
+                          # always uses the 200-transcript scoring cache (quick test).
+  n_workers: 6            # processes for lemmatizing the full corpus (cache/discovery/sentences_full.parquet)
   min_df: 3               # classifier features: bigrams in >= 3 training sentences
-  s_train_size: 100000    # training set = all of R + min(s_train_size, |S|) random S sentences
+  # Training set = all of R + |S_train| random S sentences, with
+  # |S_train| = min(round(s_train_ratio * |R|), |S|, s_train_max). The paper's R ~ 60k and
+  # S sample = 100k; the 100k is a corpus-size artefact, the RATIO is what we keep.
+  s_train_ratio: 1.667    # = 100,000 / 60,000 from the paper (R ~ 37.5% of the training set)
+  s_train_max: 100000
+  oof_folds: 5            # S_train sentences are scored out-of-fold (cross_val_predict, k folds)
   t_threshold: 0.8        # T = S sentences with max(P_nb, P_svc, P_rf) > t_threshold

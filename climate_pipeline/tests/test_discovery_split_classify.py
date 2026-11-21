@@ -8,7 +8,10 @@ PIPELINE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PIPELINE_DIR))
 
 from run import load_config  # noqa: E402
-from src.discovery.classify import add_target, build_vectorizer, classify  # noqa: E402
+from sklearn.model_selection import StratifiedKFold, cross_val_predict  # noqa: E402
+
+from src.discovery.classify import (add_target, build_vectorizer, classify, make_model,  # noqa: E402
+                                    s_train_size, score_s, train_test_split_rs)
 from src.discovery.split import load_seeds, split_rs  # noqa: E402
 
 CFG = load_config(PIPELINE_DIR / "config.yaml")
@@ -28,7 +31,9 @@ def test_seeds_in_config():
     ts = CFG["topic_seeds"]
     assert (len(ts["opp"]), len(ts["reg"]), len(ts["phy"])) == (18, 19, 14)
     d = CFG["discovery"]
-    assert d["min_df"] == 3 and d["s_train_size"] == 100000 and d["t_threshold"] == 0.8
+    assert d["min_df"] == 3 and d["t_threshold"] == 0.8
+    assert d["s_train_ratio"] == 1.667 and d["s_train_max"] == 100000 and d["oof_folds"] == 5
+    assert d["corpus"] in ("full", "sample") and "s_train_size" not in d
 
 
 # ---- task 2.2: split ----------------------------------------------------------------
@@ -125,12 +130,13 @@ def test_toy_classifier_run():
     assert len(R) == len(climate_r) and len(S) == len(climate_s) + len(other_s)
 
     thr = 0.5
-    scored, vec = classify(R, S, seeds, min_df=1, s_train_size=1000, threshold=thr, seed=0,
-                           chunk_size=7, verbose=False)
+    scored, vec, info = classify(R, S, seeds, min_df=1, ratio=1.667, s_max=100000, threshold=thr,
+                                 seed=0, chunk_size=3, folds=3, verbose=False)
+    assert info["n_s_train"] == round(1.667 * len(R)) == 20
     assert not set(vec.get_feature_names_out()) & set(seeds)
     assert len(scored) == len(S)
     assert scored["sentence_id"].tolist() == S["sentence_id"].tolist()   # chunks keep order
-    assert scored["in_train"].all()                                      # |S| < s_train_size
+    assert scored["in_train"].sum() == 20 and (~scored["in_train"]).sum() == len(S) - 20
     for c in ("p_nb", "p_svc", "p_rf", "p_max"):
         assert scored[c].between(0, 1).all()
     assert (scored["p_max"] == scored[["p_nb", "p_svc", "p_rf"]].max(axis=1)).all()
@@ -145,9 +151,38 @@ def test_toy_classifier_run():
     assert p[clim_ids].mean() > p[other_ids].mean()
 
 
-def test_train_sample_size_respected():
-    R = _df(["climate change risk"] * 5)
-    S = _df([f"revenue grow {i}" for i in range(20)])
-    from src.discovery.classify import train_test_split_rs
-    train, in_train = train_test_split_rs(R, S, s_train_size=8, seed=1)
-    assert len(train) == 13 and int(train["y"].sum()) == 5 and in_train.sum() == 8
+def test_s_train_follows_ratio():
+    assert s_train_size(300, 88000, 1.667, 100000) == 500
+    assert s_train_size(60000, 10**6, 1.667, 100000) == 100000     # paper: capped at 100k
+    assert s_train_size(300, 200, 1.667, 100000) == 200            # capped at |S|
+    R = _df(["climate change risk"] * 6)
+    S = _df([f"revenue grow {i}" for i in range(30)])
+    train, in_train = train_test_split_rs(R, S, s_train_size(len(R), len(S), 1.667, 100000), seed=1)
+    assert in_train.sum() == 10 and len(train) == 16 and int(train["y"].sum()) == 6
+    assert abs(train["y"].mean() - 0.375) < 0.01                   # R ~ 37.5% of training
+
+
+def test_in_train_sentences_get_out_of_fold_probs():
+    rng = np.random.default_rng(0)
+    words_r = ["climate", "carbon", "renewable", "emission", "solar", "wind", "grid", "hydrogen"]
+    words_s = ["revenue", "margin", "cash", "dividend", "store", "customer", "debt", "share"]
+    mix = words_r + words_s
+    R = _df([" ".join(rng.choice(words_r, 6)) + " " + " ".join(rng.choice(mix, 2)) for _ in range(30)])
+    S = _df([" ".join(rng.choice(words_s, 6)) + " " + " ".join(rng.choice(mix, 2)) for _ in range(80)])
+    n_st = s_train_size(len(R), len(S), 1.667, 100000)
+    train, in_train = train_test_split_rs(R, S, n_st, seed=3)
+    vec = build_vectorizer(train["sentence"].tolist(), [], min_df=1)
+    X, y = vec.transform(train["sentence"].tolist()), train["y"].to_numpy()
+    probs, _ = score_s(S["sentence"].tolist(), in_train, X, y, vec, seed=3, folds=5, chunk_size=7,
+                       verbose=False)
+    # in-train S rows == cross_val_predict with the same folds (NB is deterministic)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=3)
+    oof = cross_val_predict(make_model("nb", 3), X, y, cv=cv, method="predict_proba")[len(R):, 1]
+    assert np.allclose(probs["p_nb"].to_numpy()[in_train], oof)
+    # ... and NOT the in-sample prediction of the model fitted on everything
+    full = make_model("nb", 3).fit(X, y).predict_proba(X)[len(R):, 1]
+    assert not np.allclose(probs["p_nb"].to_numpy()[in_train], full)
+    # out-of-train S rows == full-model prediction
+    Xo = vec.transform(S.loc[~in_train, "sentence"].tolist())
+    assert np.allclose(probs["p_nb"].to_numpy()[~in_train], make_model("nb", 3).fit(X, y).predict_proba(Xo)[:, 1])
+    assert probs.notna().all().all()

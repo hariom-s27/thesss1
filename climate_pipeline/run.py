@@ -177,17 +177,29 @@ def stage_isin_gap(cfg: dict) -> None:
 def stage_discover(cfg: dict) -> None:
     """Tasks 2.1 -> 2.2 -> 2.3: seeds, R/S split, 3 classifiers, target set T (cache/discovery/).
 
-    PROTOTYPE: M = all sentences in cache/sentences.parquet, no rough library (Phase 3, task 3.1).
+    PROTOTYPE: M = all sentences of the chosen corpus, no rough library (Phase 3, task 3.1).
+    Corpus: `--sample` -> the 200-transcript scoring cache (cache/sentences.parquet);
+    otherwise discovery.corpus: full -> cache/discovery/sentences_full.parquet (own manifest),
+    sample -> the 200-transcript scoring cache.
     """
     import time
 
     import pandas as pd
 
     from src.discovery.classify import run_classify
+    from src.discovery.corpus import load_full_sentences
     from src.discovery.split import run_split
 
     t0 = time.perf_counter()
-    sents = pd.read_parquet(ensure_sentences(cfg, "discover"))
+    corpus = "sample" if cfg["settings"]["sample_mode"] else cfg["discovery"]["corpus"]
+    if corpus not in ("full", "sample"):
+        raise ValueError(f"discovery.corpus must be full or sample, got {corpus!r}")
+    print(f"[discover] corpus = {corpus}")
+    if corpus == "full":
+        sents = load_full_sentences(cfg, force=cfg.get("force", False))
+    else:
+        cfg["settings"]["sample_mode"] = True  # the sample cache is keyed on sample settings
+        sents = pd.read_parquet(ensure_sentences(cfg, "discover"))
     R, S = run_split(cfg, sents)
     run_classify(cfg, R, S)
     print(f"[discover] done in {time.perf_counter() - t0:.1f}s")

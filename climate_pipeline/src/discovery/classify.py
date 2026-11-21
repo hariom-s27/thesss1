@@ -4,16 +4,18 @@ ROADMAP section 3, steps 4-5 (Internet Appendix I):
   * features: bigram counts from the shared cleaner (src.preprocess.make_vectorizer) with
     min_df = config discovery.min_df, and ALL seed bigrams removed (the label is defined by
     the seeds, so keeping them would leak the answer);
-  * training set: all of R + min(s_train_size, |S|) random S sentences; label 1 = R, 0 = S;
+  * training set: all of R + S_train, a random S sample of size
+    min(round(s_train_ratio * |R|), |S|, s_train_max). The paper trains on R (~60k) + 100k
+    of S, i.e. R ~ 37.5% of the training set; the 100k is a corpus-size artefact, so we keep
+    the RATIO (1 : 1.667), not the absolute number. Label 1 = R, 0 = S;
   * classifiers: Multinomial NB, SVC, Random Forest (no grid search yet -> task 3.2;
     no class_weight, the paper does not mention one);
+  * scoring without in-sample bias: S sentences NOT in S_train are scored by the models fitted
+    on the whole training set; S sentences IN S_train are scored out-of-fold
+    (cross_val_predict, k = discovery.oof_folds), so no sentence is scored by a model that saw it;
   * T = S sentences where max(P_nb, P_svc, P_rf) > discovery.t_threshold.
 
 PROTOTYPE: M = all sentences, no rough library (see split.py).
-
-Note: as in the paper, the S sentences used for training are also scored. On a small sample
-(|S| < s_train_size) that is ALL of S, so P(R) is in-sample for every S sentence (RF in
-particular memorises its training rows). Column `in_train` records this.
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
 
@@ -45,48 +48,68 @@ def build_vectorizer(train_sentences: list[str], seeds, min_df: int | float):
     return make_vectorizer(vocabulary=vocab).fit(train_sentences[:1])
 
 
-def make_models(seed: int) -> dict:
-    return {
-        "nb": MultinomialNB(),
+def make_model(name: str, seed: int):
+    if name == "nb":
+        return MultinomialNB()
+    if name == "svc":
         # DEVIATION: the paper uses SVC; a kernel SVC with probability=True is far too slow on
-        # sparse text with ~10^5 rows, so we use LinearSVC and get probabilities from
+        # sparse text, so we use LinearSVC and get probabilities from
         # CalibratedClassifierCV(cv=3) (Platt scaling over 3 folds).
-        "svc": CalibratedClassifierCV(LinearSVC(random_state=seed), cv=3),
-        "rf": RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=seed),
-    }
+        return CalibratedClassifierCV(LinearSVC(random_state=seed), cv=3)
+    if name == "rf":
+        return RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=seed)
+    raise ValueError(name)
 
 
-def train_test_split_rs(R: pd.DataFrame, S: pd.DataFrame, s_train_size: int, seed: int):
-    """Training frame (R + random S sample) with label column y, plus a boolean in-train mask for S."""
-    n = min(int(s_train_size), len(S))
+def s_train_size(n_r: int, n_s: int, ratio: float, max_n: int) -> int:
+    """|S_train| = min(round(ratio * |R|), |S|, max_n)."""
+    return int(min(round(ratio * n_r), n_s, max_n))
+
+
+def train_test_split_rs(R: pd.DataFrame, S: pd.DataFrame, n_s_train: int, seed: int):
+    """Training frame (all R, then S_train in S order) with label y, plus boolean in-train mask for S."""
     rng = np.random.default_rng(seed)
-    idx = np.sort(rng.choice(len(S), size=n, replace=False))
+    idx = np.sort(rng.choice(len(S), size=n_s_train, replace=False))
     in_train = np.zeros(len(S), dtype=bool)
     in_train[idx] = True
     train = pd.concat([R.assign(y=1), S.iloc[idx].assign(y=0)], ignore_index=True)
     return train, in_train
 
 
-def fit_models(X, y, seed: int, verbose: bool = True) -> dict:
-    models = make_models(seed)
-    for name, m in models.items():
+def _p_r(model, X) -> np.ndarray:
+    return model.predict_proba(X)[:, list(model.classes_).index(1)]
+
+
+def score_s(S_sentences: list[str], in_train: np.ndarray, X_train, y_train: np.ndarray, vec,
+            seed: int, folds: int, chunk_size: int, verbose: bool = True):
+    """P(R) from each model for every S sentence.
+
+    Rows of X_train are R first, then the S_train sentences in S order (as built by
+    train_test_split_rs). In-train S rows get out-of-fold probabilities; the rest are scored
+    in chunks by the model fitted on the whole training set. Returns (probs DataFrame, seconds per model).
+    """
+    n_r = int(y_train.sum())
+    min_class = int(min(n_r, len(y_train) - n_r))
+    if min_class < folds:
+        raise ValueError(f"need >= {folds} sentences per class for {folds}-fold OOF, have {min_class}")
+    cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+    out_idx = np.flatnonzero(~in_train)
+    probs, secs = {}, {}
+    for name in MODELS:
         t0 = time.perf_counter()
-        m.fit(X, y)
+        p = np.empty(len(S_sentences))
+        oof = cross_val_predict(make_model(name, seed), X_train, y_train, cv=cv, method="predict_proba")
+        p[in_train] = oof[n_r:, 1]          # classes sorted [0, 1] -> column 1 = P(R)
+        model = make_model(name, seed).fit(X_train, y_train)
+        for start in range(0, len(out_idx), chunk_size):
+            rows = out_idx[start:start + chunk_size]
+            p[rows] = _p_r(model, vec.transform([S_sentences[i] for i in rows]))
+        probs[f"p_{name}"] = p
+        secs[name] = time.perf_counter() - t0
         if verbose:
-            print(f"[discover]   fitted {name:<3s} in {time.perf_counter() - t0:6.1f}s")
-    return models
-
-
-def predict_s(S_sentences: list[str], vec, models: dict, chunk_size: int) -> pd.DataFrame:
-    """P(R) from each model for every S sentence, transformed and predicted in chunks."""
-    parts = []
-    for start in range(0, len(S_sentences), chunk_size):
-        X = vec.transform(S_sentences[start:start + chunk_size])
-        parts.append(pd.DataFrame({f"p_{k}": m.predict_proba(X)[:, list(m.classes_).index(1)]
-                                   for k, m in models.items()}))
-    if not parts:
-        return pd.DataFrame(columns=[f"p_{k}" for k in models])
-    return pd.concat(parts, ignore_index=True)
+            print(f"[discover]   {name:<3s} fit + {folds}-fold OOF + predict {len(out_idx):,} "
+                  f"out-of-train S: {secs[name]:7.1f}s")
+    return pd.DataFrame(probs), secs
 
 
 def add_target(probs: pd.DataFrame, threshold: float) -> pd.DataFrame:
@@ -97,53 +120,60 @@ def add_target(probs: pd.DataFrame, threshold: float) -> pd.DataFrame:
     return out
 
 
-def classify(R: pd.DataFrame, S: pd.DataFrame, seeds, min_df, s_train_size: int, threshold: float,
-             seed: int, chunk_size: int, verbose: bool = True):
-    """Pure core of task 2.3. Returns (S_scored, vectorizer)."""
-    train, in_train = train_test_split_rs(R, S, s_train_size, seed)
+def classify(R: pd.DataFrame, S: pd.DataFrame, seeds, min_df, ratio: float, s_max: int,
+             threshold: float, seed: int, chunk_size: int, folds: int, verbose: bool = True):
+    """Pure core of task 2.3. Returns (S_scored, vectorizer, info)."""
+    n_st = s_train_size(len(R), len(S), ratio, s_max)
+    train, in_train = train_test_split_rs(R, S, n_st, seed)
     vec = build_vectorizer(train["sentence"].tolist(), seeds, min_df)
     X = vec.transform(train["sentence"].tolist())
+    y = train["y"].to_numpy()
+    info = {"n_train": len(train), "n_r": len(R), "n_s_train": n_st,
+            "r_share_train": len(R) / max(len(train), 1), "n_features": X.shape[1]}
     if verbose:
-        print(f"[discover]   training set: {len(train):,} sentences ({int(train['y'].sum()):,} R + "
-              f"{int((train['y'] == 0).sum()):,} S), {X.shape[1]:,} features "
-              f"(min_df={min_df}, seeds removed)")
-    models = fit_models(X, train["y"].to_numpy(), seed, verbose)
-    probs = predict_s(S["sentence"].tolist(), vec, models, chunk_size)
+        print(f"[discover]   training set: {len(train):,} sentences = {len(R):,} R + {n_st:,} S_train "
+              f"(R share {info['r_share_train']:.1%}; ratio {ratio} x |R|, max {s_max:,}), "
+              f"{X.shape[1]:,} features (min_df={min_df}, seeds removed)")
+    probs, info["secs"] = score_s(S["sentence"].tolist(), in_train, X, y, vec, seed, folds,
+                                  chunk_size, verbose)
     scored = add_target(probs, threshold)
     scored.insert(0, "file", S["file"].to_numpy())
     scored.insert(1, "sentence_id", S["sentence_id"].to_numpy())
     scored["in_train"] = in_train
-    return scored, vec
+    return scored, vec, info
 
 
-def run_classify(cfg: dict, R: pd.DataFrame, S: pd.DataFrame) -> pd.DataFrame:
+def run_classify(cfg: dict, R: pd.DataFrame, S: pd.DataFrame, n_examples: int = 20) -> pd.DataFrame:
     """Task 2.3 stage wrapper: classify, save cache/discovery/S_scored.parquet, print summary."""
     d = cfg["discovery"]
     seed = cfg["settings"]["sample_seed"]
     thr = float(d["t_threshold"])
     print(f"[discover] task 2.3: NB + SVC(LinearSVC+calibration, DEVIATION) + RF ({PROTOTYPE_NOTE})")
-    scored, _ = classify(R, S, load_seeds(cfg), d["min_df"], d["s_train_size"], thr, seed,
-                         cfg["settings"]["chunk_size"])
+    scored, _, info = classify(R, S, load_seeds(cfg), d["min_df"], float(d["s_train_ratio"]),
+                               int(d["s_train_max"]), thr, seed, cfg["settings"]["chunk_size"],
+                               int(d["oof_folds"]))
 
     out = discovery_dir(cfg) / "S_scored.parquet"
     scored.to_parquet(out, index=False)
 
     T = scored[scored["in_T"]]
-    print(f"[discover] |T| = {len(T):,} of |S| = {len(S):,} ({len(T) / max(len(S), 1):.2%}) "
+    tr = scored["in_train"]
+    print(f"[discover] |T| = {len(T):,} of |S| = {len(S):,} (T share of S {len(T) / max(len(S), 1):.2%}) "
           f"with p_max > {thr} -> {out}")
     print("[discover] |T| per classifier: " + "  ".join(
         f"{k}={int((scored[f'p_{k}'] > thr).sum()):,}" for k in MODELS))
-    print(f"[discover] S sentences used in training: {int(scored['in_train'].sum()):,} "
-          f"(T among them: {int(T['in_train'].sum()):,}; P(R) is in-sample for these)")
+    print(f"[discover] |T| in_train (out-of-fold) = {int(T['in_train'].sum()):,} of {int(tr.sum()):,}  |  "
+          f"not in_train = {int((~T['in_train']).sum()):,} of {int((~tr).sum()):,}")
     q = scored["p_max"].quantile([0.5, 0.9, 0.99, 0.999])
-    print("[discover] p_max quantiles: " + "  ".join(f"{int(round(p * 1000)) / 10:g}%={v:.4f}"
-                                                   for p, v in q.items()))
+    print("[discover] p_max quantiles: " + "  ".join(f"{p * 100:g}%={v:.4f}" for p, v in q.items()))
+    print("[discover] run time per classifier: " + "  ".join(f"{k}={v:.1f}s" for k, v in info["secs"].items()))
 
-    n_ex = min(15, len(T))
+    n_ex = min(n_examples, len(T))
     if n_ex:
         ex = T.sample(n=n_ex, random_state=seed).merge(S, on=["file", "sentence_id"], how="left")
         print(f"[discover] {n_ex} random example sentences from T (lemmatized):")
         for i, r in enumerate(ex.itertuples(index=False), 1):
             txt = r.sentence if len(r.sentence) <= 220 else r.sentence[:217] + "..."
-            print(f"  {i:>2}. [{r.file} | nb={r.p_nb:.2f} svc={r.p_svc:.2f} rf={r.p_rf:.2f}] {txt}")
+            print(f"  {i:>2}. [{r.file} | nb={r.p_nb:.2f} svc={r.p_svc:.2f} rf={r.p_rf:.2f}"
+                  f"{' | oof' if r.in_train else ''}] {txt}")
     return scored
