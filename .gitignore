@@ -40,3 +40,10 @@ sep_week1/arpipe-t0.*/
 sep_week1/.firecrawl/
 sep_week2/*.exe
 ARPipe_Memory_update_*.zip
+
+# ---- climate_pipeline: raw inputs and intermediate parquet (keep folders via .gitkeep) ----
+climate_pipeline/data/*
+!climate_pipeline/data/.gitkeep
+climate_pipeline/cache/*
+!climate_pipeline/cache/.gitkeep
+.pytest_cache/
