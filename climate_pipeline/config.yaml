@@ -4,10 +4,11 @@
 paths:
   # External data (outside repo, read-only)
   authors_dictionaries: "D:/sem_iitk/sem9/thesis/old _work/code/jofi13219-sup-0002-replicationcode/Replication Files Sautner et al. (2023)/B. Figure 1 2, Table 2, and IA Table 6 7 8 9 11/bigrams"
-  api_transcripts: "D:/sem_iitk/sem9/thesis/api_transcripts"
-  pdf_transcripts: "D:/sem_iitk/sem9/thesis/old _work/transcript"
+  pdf_dir: "D:/sem_iitk/sem9/thesis/old _work/transcript"            # .pdf transcripts (pdfplumber)
   official_scores: "D:/sem_iitk/sem9/thesis/old _work/csv/firmyear_score_2024Q4_Version_2025_Jul_03.csv"
   transcript_dir: "D:/sem_iitk/sem9/thesis/api_transcripts"   # .txt transcripts read by the preprocess stage
+
+  ticker_isin_map: "../ticker_isin_map.json"                         # repo root
 
   # Internal working folders
   data: "data"
@@ -17,5 +18,6 @@ paths:
 settings:
   sample_mode: false      # overridden to true by `run.py --sample`
   sample_size: 200        # number of transcripts used in sample mode
+  sample_seed: 42         # fixed seed for the firm-spread random sample
   chunk_size: 50000       # sentences per batch for chunked processing
   dictionary: authors     # authors | discovered

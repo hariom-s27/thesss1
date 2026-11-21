@@ -1,7 +1,7 @@
 """Single entry point for the climate-exposure pipeline.
 
 Usage:
-    python run.py --stage <preprocess|score|discover|validate|all> [--sample] [--config PATH]
+    python run.py --stage <preprocess|score|discover|validate|all> [--sample] [--force] [--config PATH]
 """
 from __future__ import annotations
 
@@ -36,30 +36,33 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
 # ---- stages (stubs for now) -------------------------------------------------
 
 def stage_preprocess(cfg: dict) -> None:
-    """Lemmatize .txt transcripts into cache/sentences.parquet (file, sentence_id, sentence)."""
+    """list -> sample -> read -> cache/transcripts.parquet -> lemmatize -> cache/sentences.parquet."""
     import pandas as pd
 
+    from src.io_utils import load_transcripts
     from src.preprocess import lemmatize
 
-    tdir = cfg["paths"]["transcript_dir"]
-    files = sorted(tdir.glob("*.txt"))
-    if not files:
-        raise FileNotFoundError(f"no .txt transcripts in transcript_dir: {tdir}")
-    if cfg["settings"]["sample_mode"]:
-        files = files[: cfg["settings"]["sample_size"]]
+    force = cfg.get("force", False)
+    tdf = load_transcripts(cfg, force=force)
+
+    out = cfg["paths"]["cache"] / "sentences.parquet"
+    if out.exists() and not force:
+        print(f"[preprocess] reusing cached {out} (use --force to rebuild)")
+        return
 
     rows = []
-    for i, p in enumerate(files, 1):
-        sents = lemmatize(p.read_text(encoding="utf-8"))
-        rows.extend((p.name, j, s) for j, s in enumerate(sents))
-        if i % 25 == 0 or i == len(files):
-            print(f"[preprocess] {i}/{len(files)} transcripts")
+    for i, r in enumerate(tdf.itertuples(index=False), 1):
+        sents = lemmatize(r.text)
+        rows.extend((r.file, r.ticker, r.year, r.quarter, j, s) for j, s in enumerate(sents))
+        if i % 25 == 0 or i == len(tdf):
+            print(f"[preprocess] {i}/{len(tdf)} transcripts")
 
-    df = pd.DataFrame(rows, columns=["file", "sentence_id", "sentence"])
-    out = cfg["paths"]["cache"] / "sentences.parquet"
+    df = pd.DataFrame(rows, columns=["file", "ticker", "year", "quarter", "sentence_id", "sentence"])
+    df["year"] = df["year"].astype("Int64")
+    df["quarter"] = df["quarter"].astype("Int64")
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
-    print(f"[preprocess] processed {len(files)} transcripts, {len(df)} sentences -> {out}")
+    print(f"[preprocess] processed {len(tdf)} transcripts, {len(df)} sentences -> {out}")
 
 
 def stage_score(cfg: dict) -> None:
@@ -88,6 +91,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--stage", required=True, choices=[*STAGES, "all"], help="pipeline stage to run")
     parser.add_argument("--sample", action="store_true",
                         help="run on a small sample (settings.sample_size transcripts)")
+    parser.add_argument("--force", action="store_true",
+                        help="rebuild cache/*.parquet even if they already exist")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to config.yaml")
     return parser.parse_args(argv)
 
@@ -97,6 +102,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = load_config(args.config)
     if args.sample:
         cfg["settings"]["sample_mode"] = True
+    cfg["force"] = args.force
 
     s = cfg["settings"]
     print(f"sample_mode={s['sample_mode']} sample_size={s['sample_size']} "

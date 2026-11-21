@@ -12,7 +12,7 @@ from run import load_config  # noqa: E402
 def test_config_loads():
     cfg = load_config(PIPELINE_DIR / "config.yaml")
 
-    for key in ("authors_dictionaries", "api_transcripts", "pdf_transcripts", "official_scores",
+    for key in ("authors_dictionaries", "transcript_dir", "pdf_dir", "official_scores", "ticker_isin_map",
                 "data", "cache", "outputs"):
         assert key in cfg["paths"], key
         assert isinstance(cfg["paths"][key], Path)
@@ -20,6 +20,7 @@ def test_config_loads():
     s = cfg["settings"]
     assert s["sample_mode"] is False
     assert s["sample_size"] == 200
+    assert s["sample_seed"] == 42
     assert isinstance(s["chunk_size"], int) and s["chunk_size"] > 0
     assert s["dictionary"] in ("authors", "discovered")
 
