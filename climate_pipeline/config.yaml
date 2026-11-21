@@ -3,10 +3,11 @@
 
 paths:
   # External data (outside repo, read-only)
-  authors_dictionaries: "D:/sem_iitk/sem 8/thesis/old _work/code/jofi13219-sup-0002-replicationcode/Replication Files Sautner et al. (2023)/B. Figure 1 2, Table 2, and IA Table 6 7 8 9 11/bigrams"
-  api_transcripts: "D:/sem_iitk/sem 8/thesis/api_transcripts"
-  pdf_transcripts: "D:/sem_iitk/sem 8/thesis/old _work/transcript"
-  official_scores: "D:/sem_iitk/sem 8/thesis/old _work/csv/firmyear_score_2024Q4_Version_2025_Jul_03.csv"
+  authors_dictionaries: "D:/sem_iitk/sem9/thesis/old _work/code/jofi13219-sup-0002-replicationcode/Replication Files Sautner et al. (2023)/B. Figure 1 2, Table 2, and IA Table 6 7 8 9 11/bigrams"
+  api_transcripts: "D:/sem_iitk/sem9/thesis/api_transcripts"
+  pdf_transcripts: "D:/sem_iitk/sem9/thesis/old _work/transcript"
+  official_scores: "D:/sem_iitk/sem9/thesis/old _work/csv/firmyear_score_2024Q4_Version_2025_Jul_03.csv"
+  transcript_dir: "D:/sem_iitk/sem9/thesis/api_transcripts"   # .txt transcripts read by the preprocess stage
 
   # Internal working folders
   data: "data"

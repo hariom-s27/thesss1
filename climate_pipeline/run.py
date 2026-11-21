@@ -36,7 +36,30 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
 # ---- stages (stubs for now) -------------------------------------------------
 
 def stage_preprocess(cfg: dict) -> None:
-    print("[preprocess] not implemented yet (task 0.2/0.3)")
+    """Lemmatize .txt transcripts into cache/sentences.parquet (file, sentence_id, sentence)."""
+    import pandas as pd
+
+    from src.preprocess import lemmatize
+
+    tdir = cfg["paths"]["transcript_dir"]
+    files = sorted(tdir.glob("*.txt"))
+    if not files:
+        raise FileNotFoundError(f"no .txt transcripts in transcript_dir: {tdir}")
+    if cfg["settings"]["sample_mode"]:
+        files = files[: cfg["settings"]["sample_size"]]
+
+    rows = []
+    for i, p in enumerate(files, 1):
+        sents = lemmatize(p.read_text(encoding="utf-8"))
+        rows.extend((p.name, j, s) for j, s in enumerate(sents))
+        if i % 25 == 0 or i == len(files):
+            print(f"[preprocess] {i}/{len(files)} transcripts")
+
+    df = pd.DataFrame(rows, columns=["file", "sentence_id", "sentence"])
+    out = cfg["paths"]["cache"] / "sentences.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out, index=False)
+    print(f"[preprocess] processed {len(files)} transcripts, {len(df)} sentences -> {out}")
 
 
 def stage_score(cfg: dict) -> None:

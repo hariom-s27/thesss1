@@ -17,6 +17,7 @@ Full plan: ROADMAP_climate_exposure_pipeline.md (work task by task, in order).
 - Old outputs in `outputs/` are the "before" numbers; new code must match them
   (e.g. ExxonMobil 2024 CCExposure = 0.00451 with the authors' dictionary).
 - One task = one commit. Never commit data, .env, or API keys.
+- Always use .venv\Scripts\python.exe in this repo (never D:\sem_iitk\sem9\thesis\.venv).
 
 ## Data locations (outside repo, read-only)
 - Authors' dictionaries (.pkl): D:/sem_iitk/sem 8/thesis/old _work/code/jofi13219-sup-0002-replicationcode/Replication Files Sautner et al. (2023)/B. Figure 1 2, Table 2, and IA Table 6 7 8 9 11/bigrams

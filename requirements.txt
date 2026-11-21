@@ -6,3 +6,7 @@ pandas
 numpy
 requests
 pysentiment2
+pyyaml
+pytest
+scipy
+pyarrow
