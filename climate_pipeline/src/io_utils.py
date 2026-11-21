@@ -49,10 +49,17 @@ def load_isin_map(cfg: dict) -> dict:
         return {k.upper(): v for k, v in json.load(f).items()}
 
 
-def list_transcripts(cfg: dict, verbose: bool = True) -> pd.DataFrame:
-    """All .txt (transcript_dir) and .pdf (pdf_dir) transcripts as a metadata DataFrame."""
+def list_transcripts(cfg: dict, sources: tuple[str, ...] = ("txt", "pdf"),
+                     verbose: bool = True) -> pd.DataFrame:
+    """Transcripts as a metadata DataFrame: .txt from transcript_dir, .pdf from pdf_dir.
+
+    PDF names carry no ticker, so every PDF gets settings.pdf_ticker / settings.pdf_isin
+    (ExxonMobil; the PDFs are used only for the XOM validation check).
+    """
     rows = []
     for key, source in (("transcript_dir", "txt"), ("pdf_dir", "pdf")):
+        if source not in sources:
+            continue
         d = cfg["paths"].get(key)
         if d is None or not Path(d).is_dir():
             if verbose:
@@ -64,7 +71,14 @@ def list_transcripts(cfg: dict, verbose: bool = True) -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=META_COLS[:-1])
     df["year"] = df["year"].astype("Int64")
     df["quarter"] = df["quarter"].astype("Int64")
+    s = cfg["settings"]
+    is_pdf = df["source"] == "pdf"
+    if is_pdf.any():
+        df["ticker"] = df["ticker"].astype(object)
+        df.loc[is_pdf, "ticker"] = str(s["pdf_ticker"]).upper()
     isin = load_isin_map(cfg)
+    if is_pdf.any() and s.get("pdf_isin"):
+        isin[str(s["pdf_ticker"]).upper()] = s["pdf_isin"]
     df["isin"] = df["ticker"].map(lambda t: isin.get(t, np.nan) if isinstance(t, str) else np.nan)
 
     n_bad = int(df[["ticker", "year", "quarter"]].isna().any(axis=1).sum())
@@ -113,29 +127,138 @@ def read_text(path: str | Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+# ---- cache manifest -----------------------------------------------------------
+
+def _manifest_path(cfg: dict) -> Path:
+    return Path(cfg["paths"]["cache"]) / "manifest.json"
+
+
+def current_manifest(cfg: dict, n_files: int) -> dict:
+    """Settings that define the cached corpus. Sample size/seed only matter in sample mode."""
+    s = cfg["settings"]
+    sample = bool(s["sample_mode"])
+    return {"mode": "sample" if sample else "full",
+            "sample_size": s["sample_size"] if sample else None,
+            "sample_seed": s["sample_seed"] if sample else None,
+            "n_files": int(n_files)}
+
+
+def read_manifest(cfg: dict) -> dict | None:
+    p = _manifest_path(cfg)
+    if not p.exists():
+        return None
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_manifest(cfg: dict, want: dict, built: list[str]) -> None:
+    p = _manifest_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump({**want, "built": built}, f, indent=2)
+
+
+def manifest_mismatch(cfg: dict, want: dict, stage: str) -> str | None:
+    """Why the cache for `stage` must be rebuilt, or None if it matches `want`."""
+    have = read_manifest(cfg)
+    if have is None:
+        return "no cache/manifest.json"
+    diffs = [f"{k}: cached={have.get(k)!r} now={v!r}" for k, v in want.items() if have.get(k) != v]
+    if diffs:
+        return "manifest differs (" + "; ".join(diffs) + ")"
+    if stage not in have.get("built", []):
+        return f"{stage} not built for these settings"
+    return None
+
+
+def corpus_listing(cfg: dict, verbose: bool = True) -> pd.DataFrame:
+    """The scoring corpus = .txt transcripts only (PDFs are kept for check_xom)."""
+    return list_transcripts(cfg, sources=("txt",), verbose=verbose)
+
+
 def load_transcripts(cfg: dict, force: bool = False) -> pd.DataFrame:
-    """list -> sample (if sample_mode) -> read; cached in cache/transcripts.parquet."""
+    """list .txt -> sample (if sample_mode) -> read; cached in cache/transcripts.parquet.
+
+    The cache is rebuilt when --force is given, when it is missing, or when
+    cache/manifest.json does not match the current settings (the reason is printed).
+    """
     out = Path(cfg["paths"]["cache"]) / "transcripts.parquet"
-    if out.exists() and not force:
-        print(f"[io] reusing cached {out} (use --force to rebuild)")
+    s = cfg["settings"]
+    listing = corpus_listing(cfg)
+    if listing.empty:
+        raise FileNotFoundError("no .txt transcripts found in transcript_dir")
+    want = current_manifest(cfg, len(listing))
+
+    if force:
+        reason = "--force"
+    elif not out.exists():
+        reason = f"{out.name} missing"
+    else:
+        reason = manifest_mismatch(cfg, want, "transcripts")
+    if reason is None:
+        print(f"[io] reusing cached {out} (manifest matches; use --force to rebuild)")
         df = pd.read_parquet(out)
-        print_summary(df, len(list_transcripts(cfg, verbose=False)))
+        print_summary(df, len(listing))
         return df
 
-    s = cfg["settings"]
-    df = list_transcripts(cfg)
-    if df.empty:
-        raise FileNotFoundError("no transcripts found in transcript_dir / pdf_dir")
-    n_total = len(df)
+    print(f"[io] rebuilding transcripts cache: {reason}")
+    df = listing
     if s["sample_mode"]:
         df = sample_transcripts(df, s["sample_size"], s["sample_seed"])
-
+    df = df.copy()
     df["text"] = [read_text(p) for p in df["path"]]
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
-    print_summary(df, n_total)
+    write_manifest(cfg, want, built=["transcripts"])  # sentences must now be rebuilt too
+    print_summary(df, len(listing))
     print(f"[io] cached {len(df)} transcripts -> {out}")
     return df
+
+
+# ---- ISIN coverage ----------------------------------------------------------
+
+_ID_HINTS = ("ticker", "tic", "symbol", "conm", "company", "name", "comnam")
+
+
+def isin_gap(cfg: dict) -> pd.DataFrame:
+    """Tickers in the .txt corpus with no ISIN in ticker_isin_map.json.
+
+    Proposes matches only if official_scores has a ticker/company-name column that
+    can be joined reliably. It never writes to ticker_isin_map.json and never guesses.
+    """
+    listing = corpus_listing(cfg, verbose=False)
+    counts = listing.groupby("ticker").size()
+    missing = listing.loc[listing["isin"].isna(), "ticker"].dropna()
+    gap = (pd.DataFrame({"ticker": sorted(missing.unique())})
+           .assign(n_transcripts=lambda d: d["ticker"].map(counts).astype(int)))
+    print(f"[isin] {listing['ticker'].nunique()} tickers in corpus, "
+          f"{len(gap)} without ISIN in ticker_isin_map.json:")
+    print(gap.to_string(index=False) if len(gap) else "  (none)")
+
+    off_path = Path(cfg["paths"]["official_scores"])
+    if not off_path.exists():
+        print(f"[isin] official_scores not found: {off_path}")
+        return gap
+    cols = list(pd.read_csv(off_path, nrows=0).columns)
+    id_cols = [c for c in cols if c.lower() in _ID_HINTS]
+    print(f"[isin] official_scores columns: {cols}")
+    if not id_cols:
+        print("[isin] official_scores has no ticker or company-name column (only isin/gvkey/cusip), "
+              "so tickers cannot be matched to ISINs reliably from it. No matches proposed.")
+        gap["proposed_isin"] = np.nan
+        return gap
+    # A ticker column exists: propose exact, unique matches only.
+    off = pd.read_csv(off_path, usecols=["isin", *id_cols], low_memory=False).drop_duplicates()
+    prop = {}
+    for c in id_cols:
+        u = off.assign(key=off[c].astype(str).str.upper().str.strip()).groupby("key")["isin"].unique()
+        for t in gap["ticker"]:
+            if t in u.index and len(u[t]) == 1 and t not in prop:
+                prop[t] = f"{u[t][0]} (via {c})"
+    gap["proposed_isin"] = gap["ticker"].map(prop)
+    print("[isin] proposed matches (NOT written; check and add by hand):")
+    print(gap.to_string(index=False))
+    return gap
 
 
 def print_summary(df: pd.DataFrame, n_total: int) -> None:

@@ -21,3 +21,12 @@ settings:
   sample_seed: 42         # fixed seed for the firm-spread random sample
   chunk_size: 50000       # sentences per batch for chunked processing
   dictionary: authors     # authors | discovered
+  pdf_ticker: XOM         # every PDF in pdf_dir is this firm (used only by --stage check_xom)
+  pdf_isin: US30231G1022  # ISIN of pdf_ticker (matches official_scores)
+
+# Authors' dictionary files inside paths.authors_dictionaries
+dictionaries:
+  cc: bigrams_07222021.pkl        # CCExposure
+  op: opportunity_bigrams_4.pkl   # CCExposureOpp
+  rg: regulatory_bigrams_4.pkl    # CCExposureReg
+  ph: physical_bigrams_4.pkl      # CCExposurePhy
