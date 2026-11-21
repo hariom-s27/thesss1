@@ -39,10 +39,15 @@ def get_nlp():
     return _NLP
 
 
-def make_vectorizer() -> CountVectorizer:
-    """The exact vectorizer from the SvLVZ do-file."""
+def make_vectorizer(min_df: int | float = 1, vocabulary=None) -> CountVectorizer:
+    """The exact vectorizer from the SvLVZ do-file.
+
+    `min_df` / `vocabulary` are only used by discovery (feature pruning); the defaults give
+    the plain scoring vectorizer. Tokenization/stop words are identical either way.
+    """
     return CountVectorizer(analyzer="word", strip_accents="unicode",
-                           ngram_range=(2, 2), lowercase=True, stop_words="english")
+                           ngram_range=(2, 2), lowercase=True, stop_words="english",
+                           min_df=min_df, vocabulary=vocabulary)
 
 
 def lemmatize(text: str) -> list[str]:

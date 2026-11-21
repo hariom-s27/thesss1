@@ -79,20 +79,28 @@ def stage_preprocess(cfg: dict) -> None:
     print(f"[preprocess] processed {len(tdf)} transcripts, {len(df)} sentences -> {out}")
 
 
-def stage_score(cfg: dict) -> None:
-    """Eq. (1)-(4): cache/sentences.parquet -> cache/scores_transcript.parquet + outputs/scores_firmyear.csv."""
-    import pandas as pd
-
-    from src.io_utils import corpus_listing, current_manifest, load_isin_map, manifest_mismatch
-    from src.scoring import firm_year, load_dictionaries, load_lexicons, score_sentences_df
+def ensure_sentences(cfg: dict, tag: str) -> Path:
+    """Return cache/sentences.parquet, running preprocess first if it is missing or stale."""
+    from src.io_utils import corpus_listing, current_manifest, manifest_mismatch
 
     sent_path = cfg["paths"]["cache"] / "sentences.parquet"
     want = current_manifest(cfg, len(corpus_listing(cfg, verbose=False)))
     reason = (f"{sent_path.name} missing" if not sent_path.exists()
               else manifest_mismatch(cfg, want, "sentences"))
     if reason is not None:
-        print(f"[score] sentence cache does not match current settings ({reason}); running preprocess")
+        print(f"[{tag}] sentence cache does not match current settings ({reason}); running preprocess")
         stage_preprocess(cfg)
+    return sent_path
+
+
+def stage_score(cfg: dict) -> None:
+    """Eq. (1)-(4): cache/sentences.parquet -> cache/scores_transcript.parquet + outputs/scores_firmyear.csv."""
+    import pandas as pd
+
+    from src.io_utils import load_isin_map
+    from src.scoring import firm_year, load_dictionaries, load_lexicons, score_sentences_df
+
+    sent_path = ensure_sentences(cfg, "score")
 
     if cfg["settings"]["dictionary"] != "authors":
         raise NotImplementedError("dictionary: discovered is not built yet (Phase 2)")
@@ -167,7 +175,22 @@ def stage_isin_gap(cfg: dict) -> None:
 
 
 def stage_discover(cfg: dict) -> None:
-    print("[discover] not implemented yet (Phase 2)")
+    """Tasks 2.1 -> 2.2 -> 2.3: seeds, R/S split, 3 classifiers, target set T (cache/discovery/).
+
+    PROTOTYPE: M = all sentences in cache/sentences.parquet, no rough library (Phase 3, task 3.1).
+    """
+    import time
+
+    import pandas as pd
+
+    from src.discovery.classify import run_classify
+    from src.discovery.split import run_split
+
+    t0 = time.perf_counter()
+    sents = pd.read_parquet(ensure_sentences(cfg, "discover"))
+    R, S = run_split(cfg, sents)
+    run_classify(cfg, R, S)
+    print(f"[discover] done in {time.perf_counter() - t0:.1f}s")
 
 
 def stage_validate(cfg: dict) -> None:
