@@ -23,6 +23,7 @@ settings:
   dictionary: authors     # authors | discovered
   pdf_ticker: XOM         # every PDF in pdf_dir is this firm (used only by --stage check_xom)
   pdf_isin: US30231G1022  # ISIN of pdf_ticker (matches official_scores)
+  risk_list: curated      # Eq. 3 risk words: narrow | curated | lm_unc (see src/scoring.py)
 
 # Authors' dictionary files inside paths.authors_dictionaries
 dictionaries:

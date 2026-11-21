@@ -92,7 +92,7 @@ Use `scipy.special.betaln`. It's the log-gamma version, so it won't overflow on 
 ### Phase 1: Scoring module (copy what already works)
 | # | Task | Done when |
 |---|---|---|
-| 1.1 | `scoring.py` with Eq. 1 (+ opportunity, regulatory, physical) using the authors' `.pkl` files | ExxonMobil 2024 = **0.00451** (same as the old script) |
+| 1.1 | `scoring.py` with Eq. 1 (+ opportunity, regulatory, physical) using the authors' `.pkl` files | ExxonMobil 2024 CCExposure = **0.004575** (79.6% of official 0.00575), mean of 4 quarterly PDFs |
 | 1.2 | Add Eq. 2 sentiment and Eq. 3 risk | Same numbers as `phase2_sentiment_risk.py` |
 | 1.3 | Add Eq. 4 TF-IDF | Same numbers as `phase3_tfidf.py` |
 | 1.4 | Firm-year aggregation + comparison with the official OSF csv | `outputs/validation_results.csv` |

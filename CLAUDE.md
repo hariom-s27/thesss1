@@ -15,7 +15,7 @@ Full plan: ROADMAP_climate_exposure_pipeline.md (work task by task, in order).
 - Entry point: `python run.py --stage <name> [--sample]`.
 - Every task adds/updates a pytest in `tests/` and must pass before finishing.
 - Old outputs in `outputs/` are the "before" numbers; new code must match them
-  (e.g. ExxonMobil 2024 CCExposure = 0.00451 with the authors' dictionary).
+  (e.g. ExxonMobil 2024 CCExposure = 0.004575 (79.6% of official 0.00575), mean of 4 quarterly PDFs, with the authors' dictionary).
 - One task = one commit. Never commit data, .env, or API keys.
 - Always use .venv\Scripts\python.exe in this repo (never D:\sem_iitk\sem9\thesis\.venv).
 

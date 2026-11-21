@@ -58,18 +58,29 @@ def lemmatize(text: str) -> list[str]:
     return out
 
 
-def bigram_counts(sentences: list[str]) -> dict[str, int]:
-    """Bigram -> count over the whole transcript (bigrams never cross sentences)."""
+def sentence_bigram_matrix(sentences: list[str]):
+    """(M, feats): sparse CSR sentence x bigram count matrix and its bigram names.
+
+    One row per sentence, so bigrams never cross sentences. Returns (None, []) when there
+    are no sentences or no bigrams (e.g. only stop words).
+    """
     if not sentences:
-        return {}
+        return None, []
     vec = make_vectorizer()
     try:
         m = vec.fit_transform(sentences)
     except ValueError:  # empty vocabulary (e.g. only stop words)
+        return None, []
+    return m.tocsr(), [str(f) for f in vec.get_feature_names_out()]
+
+
+def bigram_counts(sentences: list[str]) -> dict[str, int]:
+    """Bigram -> count over the whole transcript (bigrams never cross sentences)."""
+    m, feats = sentence_bigram_matrix(sentences)
+    if m is None:
         return {}
-    feats = vec.get_feature_names_out()
     counts = np.asarray(m.sum(axis=0)).ravel()
-    return {str(f): int(c) for f, c in zip(feats, counts)}
+    return {f: int(c) for f, c in zip(feats, counts)}
 
 
 def total_bigrams(sentences: list[str]) -> int:
