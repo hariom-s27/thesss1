@@ -43,15 +43,34 @@ RISK_CURATED = RISK_NARROW | {
 RISK_LISTS = ("narrow", "curated", "lm_unc")  # lm_unc = narrow | whole LM Uncertainty list
 
 
-def load_dictionaries(cfg: dict, verbose: bool = True) -> dict[str, frozenset[str]]:
-    """The 4 authors' .pkl dictionaries as lowercased sets: {"cc", "op", "rg", "ph"}."""
+def load_pkl_set(path) -> frozenset[str]:
+    """A dictionary .pkl (list or set of str) as a lowercased frozenset."""
+    with open(path, "rb") as f:
+        return frozenset(str(x).lower() for x in pickle.load(f))
+
+
+def load_dictionaries(cfg: dict, verbose: bool = True, which: str | None = None) -> dict[str, frozenset[str]]:
+    """The 4 dictionaries as lowercased sets: {"cc", "op", "rg", "ph"}.
+
+    which (default settings.dictionary): "authors" -> the 4 authors' .pkl files;
+    "discovered" -> cc = cache/discovery/C_discovered.pkl (task 2.5), op/rg/ph stay the
+    authors' (topic discovery is Phase 3, task 3.3).
+    """
+    which = which or cfg["settings"]["dictionary"]
     d = Path(cfg["paths"]["authors_dictionaries"])
-    out = {}
-    for m in MEASURES:
-        with open(d / cfg["dictionaries"][m], "rb") as f:
-            out[m] = frozenset(str(x).lower() for x in pickle.load(f))
+    out = {m: load_pkl_set(d / cfg["dictionaries"][m]) for m in MEASURES}
+    if which == "discovered":
+        p = Path(cfg["paths"]["cache"]) / "discovery" / "C_discovered.pkl"
+        if not p.exists():
+            raise FileNotFoundError(f"{p} missing: run --stage discover first")
+        out["cc"] = load_pkl_set(p)
+        if verbose:
+            print(f"[score] dictionary = discovered: cc from {p.name}; op/rg/ph are still the "
+                  "AUTHORS' dictionaries (topic discovery is Phase 3)")
+    elif which != "authors":
+        raise ValueError(f"dictionary must be authors or discovered, got {which!r}")
     if verbose:
-        print("[score] dictionary sizes: " + ", ".join(f"{m}={len(out[m]):,}" for m in MEASURES))
+        print(f"[score] dictionary sizes ({which}): " + ", ".join(f"{m}={len(out[m]):,}" for m in MEASURES))
     return out
 
 

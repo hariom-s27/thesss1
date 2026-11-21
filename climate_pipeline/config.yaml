@@ -157,3 +157,7 @@ discovery:
   s_train_max: 100000
   oof_folds: 5            # S_train sentences are scored out-of-fold (cross_val_predict, k folds)
   t_threshold: 0.8        # T = S sentences with max(P_nb, P_svc, P_rf) > t_threshold
+  # Task 2.4 ranking (src/discovery/rank.py)
+  min_t_only_df: 3        # T-only bigrams kept if in >= 3 T sentences (paper keeps all T-only, but
+                          # had already dropped bigrams with frequency < 10 at preprocessing)
+  top_pct: 0.05           # shared bigrams with prop_T > prop_ST: keep the top 5% by King score
