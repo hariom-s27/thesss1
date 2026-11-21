@@ -15,7 +15,7 @@ ROADMAP section 3, steps 4-5 (Internet Appendix I):
     (cross_val_predict, k = discovery.oof_folds), so no sentence is scored by a model that saw it;
   * T = S sentences where max(P_nb, P_svc, P_rf) > discovery.t_threshold.
 
-PROTOTYPE: M = all sentences, no rough library (see split.py).
+M = all sentences (prototype) or the rough-library sentences (task 3.1), see split.py.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
 
-from src.discovery.split import PROTOTYPE_NOTE, discovery_dir, load_seeds
+from src.discovery.split import discovery_dir, load_seeds, m_note
 from src.preprocess import make_vectorizer
 
 MODELS = ("nb", "svc", "rf")
@@ -148,7 +148,7 @@ def run_classify(cfg: dict, R: pd.DataFrame, S: pd.DataFrame, n_examples: int = 
     d = cfg["discovery"]
     seed = cfg["settings"]["sample_seed"]
     thr = float(d["t_threshold"])
-    print(f"[discover] task 2.3: NB + SVC(LinearSVC+calibration, DEVIATION) + RF ({PROTOTYPE_NOTE})")
+    print(f"[discover] task 2.3: NB + SVC(LinearSVC+calibration, DEVIATION) + RF ({m_note(cfg)})")
     scored, _, info = classify(R, S, load_seeds(cfg), d["min_df"], float(d["s_train_ratio"]),
                                int(d["s_train_max"]), thr, seed, cfg["settings"]["chunk_size"],
                                int(d["oof_folds"]))

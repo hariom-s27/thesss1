@@ -63,6 +63,23 @@ def lemmatize(text: str) -> list[str]:
     return out
 
 
+def lemmatize_batch(texts: list[str], batch_size: int = 256) -> list[str]:
+    """Same output as concatenating lemmatize(t) for t in texts, but batched with nlp.pipe.
+
+    Each sentence is still its own spaCy doc (identical tokens/lemmas); pipe only removes the
+    per-call overhead. Used for the large rough-library corpora (IPCC, normal text N).
+    """
+    _ensure_nltk()
+    nlp = get_nlp()
+    sents = [s for t in texts for s in sent_tokenize(t)]
+    out = []
+    for doc in nlp.pipe(sents, batch_size=batch_size):
+        lemmas = [t.lemma_.lower() for t in doc if not t.is_space and not t.is_punct]
+        if lemmas:
+            out.append(" ".join(lemmas))
+    return out
+
+
 def sentence_bigram_matrix(sentences: list[str]):
     """(M, feats): sparse CSR sentence x bigram count matrix and its bigram names.
 

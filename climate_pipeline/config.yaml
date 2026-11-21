@@ -12,6 +12,7 @@ paths:
 
   # Internal working folders
   data: "data"
+  ipcc_dir: "data/ipcc"   # IPCC report PDFs for the rough library (task 3.1)
   cache: "cache"
   outputs: "outputs"
 
@@ -161,3 +162,32 @@ discovery:
   min_t_only_df: 3        # T-only bigrams kept if in >= 3 T sentences (paper keeps all T-only, but
                           # had already dropped bigrams with frequency < 10 at preprocessing)
   top_pct: 0.05           # shared bigrams with prop_T > prop_ST: keep the top 5% by King score
+
+  # ---- Task 3.1: rough library, set M, candidate filters (src/discovery/rough_library.py) ----
+  use_rough_library: false     # true -> M = sentences with >= 1 rough bigram (paper, IA I steps 1-2);
+                               # false -> PROTOTYPE, M = all sentences (variant A)
+  rough_min_freq: 10           # C_R: IPCC bigrams with total frequency >= this
+  n_min_freq: 2                # N: normal-text bigrams with total frequency >= this
+  n_corpora: [gutenberg, reuters, brown]   # NLTK corpora used as "normal text" N
+  rough_n_workers: 6           # processes for lemmatizing IPCC + N (results do not depend on it)
+  filter_candidates_by_N: false  # N2: drop candidate bigrams in N before ranking. OUR
+                               # INTERPRETATION for a small corpus (the paper uses N only for the
+                               # rough library)
+  min_firms_in_T: 3            # F: keep a candidate only if its T sentences come from >= this many
+                               # distinct tickers (0/1 = off). DEVIATION for a 21-firm corpus.
+                               # Only used when apply_firm_filter is true.
+  apply_firm_filter: false
+  # Evaluation (stage discover_variants)
+  vocab_shift_year: 2021       # vocabulary-shift check: T occurrences before vs from this year
+  vocab_shift_min_nkT: 10      # only bigrams with >= this many T sentences are listed
+  best_variant: auto           # auto = highest mean(Pearson, Spearman) vs official; or A/B/C/D
+  best_min_discovered: 100     # auto only considers variants with >= this many discovered bigrams
+                               # (the human-check sheet has 100 rows)
+
+# Stage `discover_variants`: each variant overrides these discovery keys, then runs 2.2-2.6.
+# Variants that share the M definition share the classifier run (cached per M).
+discovery_variants:
+  A: {use_rough_library: false, filter_candidates_by_N: false, apply_firm_filter: false}  # prototype
+  B: {use_rough_library: true,  filter_candidates_by_N: false, apply_firm_filter: false}  # paper-faithful
+  C: {use_rough_library: true,  filter_candidates_by_N: true,  apply_firm_filter: false}  # B + N2
+  D: {use_rough_library: true,  filter_candidates_by_N: true,  apply_firm_filter: true}   # C + F

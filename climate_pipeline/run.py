@@ -1,7 +1,7 @@
 """Single entry point for the climate-exposure pipeline.
 
 Usage:
-    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|discover|discover_eval|compare_dicts|validate|all> [--sample] [--force] [--config PATH]
+    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|all> [--sample] [--force] [--config PATH]
 """
 from __future__ import annotations
 
@@ -172,99 +172,57 @@ def stage_isin_gap(cfg: dict) -> None:
     isin_gap(cfg)
 
 
-def _discovery_corpus(cfg: dict) -> str:
-    corpus = "sample" if cfg["settings"]["sample_mode"] else cfg["discovery"]["corpus"]
-    if corpus not in ("full", "sample"):
-        raise ValueError(f"discovery.corpus must be full or sample, got {corpus!r}")
-    return corpus
-
-
-def _expected_n_files(cfg: dict, corpus: str) -> int | None:
-    import json
-    if corpus == "sample":
-        return int(cfg["settings"]["sample_size"])
-    p = cfg["paths"]["cache"] / "discovery" / "manifest_full.json"
-    return json.loads(p.read_text(encoding="utf-8"))["n_files"] if p.exists() else None
-
-
-def cached_classify(cfg: dict, corpus: str):
-    """(R, S, S_scored) from cache/discovery/ if present and built on `corpus`, else None.
-
-    cache/discovery/classify_manifest.json records the corpus the 2.3 output was built on.
-    A cache from before this manifest existed is accepted when its transcript count matches
-    the corpus (and the manifest is then written). in_T is recomputed from the stored p_max
-    with the current discovery.t_threshold (cheap; no classifier is re-run).
-    """
-    import json
-
+def _corpus_loader(cfg: dict, corpus: str):
+    """Callable returning the discovery corpus sentences (full cache or the 200-sample cache)."""
     import pandas as pd
 
-    d = cfg["paths"]["cache"] / "discovery"
-    paths = [d / f for f in ("R.parquet", "S.parquet", "S_scored.parquet")]
-    if cfg.get("force", False) or not all(p.exists() for p in paths):
+    from src.discovery.corpus import load_full_sentences
+
+    def load():
+        if corpus == "full":
+            return load_full_sentences(cfg, force=cfg.get("force", False))
+        cfg["settings"]["sample_mode"] = True  # the sample cache is keyed on sample settings
+        return pd.read_parquet(ensure_sentences(cfg, "discover"))
+    return load
+
+
+def _rough_if_needed(cfg: dict) -> dict | None:
+    """The rough library (C_R, N, rough) when M or filter N2 needs it, else None."""
+    d = cfg["discovery"]
+    if not (d.get("use_rough_library", False) or d.get("filter_candidates_by_N", False)):
         return None
-    R, S, scored = (pd.read_parquet(p) for p in paths)
-    n_files = int(pd.concat([R["file"], S["file"]]).nunique())
-    man = d / "classify_manifest.json"
-    if man.exists():
-        have = json.loads(man.read_text(encoding="utf-8"))
-        ok = have.get("corpus") == corpus and have.get("n_S") == len(S)
-    else:
-        ok = n_files == _expected_n_files(cfg, corpus)
-        if ok:
-            man.write_text(json.dumps({"corpus": corpus, "n_files": n_files, "n_R": len(R), "n_S": len(S)},
-                                      indent=2), encoding="utf-8")
-    if not ok or len(scored) != len(S):
-        print(f"[discover] cached 2.3 output does not match corpus={corpus}; re-running 2.2-2.3")
-        return None
-    thr = float(cfg["discovery"]["t_threshold"])
-    scored["in_T"] = scored["p_max"] > thr
-    print(f"[discover] reusing cached 2.2-2.3 output ({corpus} corpus, {n_files} transcripts): "
-          f"|R| = {len(R):,}  |S| = {len(S):,}  |T| = {int(scored['in_T'].sum()):,} (p_max > {thr}) "
-          "(use --force to re-run the classifiers)")
-    return R, S, scored
+    from src.discovery.rough_library import load_rough_library
+    return load_rough_library(cfg, n_show=0)
 
 
 def stage_discover(cfg: dict) -> None:
-    """Tasks 2.1 -> 2.5: seeds, R/S split, 3 classifiers, T, King ranking, C_discovered.
+    """Tasks 2.1 -> 2.5 (+ 3.1 switches): seeds, M, R/S split, 3 classifiers, T, King ranking, C.
 
-    2.2-2.3 are reused from cache/discovery/ when present (see cached_classify).
-    PROTOTYPE: M = all sentences of the chosen corpus, no rough library (Phase 3, task 3.1).
+    discovery.use_rough_library: false -> PROTOTYPE, M = all sentences; true -> M = sentences
+    with >= 1 IPCC rough bigram (task 3.1). 2.2-2.3 are reused from the M-specific cache
+    folder when it matches (src.discovery.pipeline.cached_classify). Filters N2
+    (filter_candidates_by_N) and F (apply_firm_filter, min_firms_in_T) act at ranking.
     Corpus: `--sample` -> the 200-transcript scoring cache (cache/sentences.parquet);
     otherwise discovery.corpus: full -> cache/discovery/sentences_full.parquet (own manifest),
     sample -> the 200-transcript scoring cache.
     """
-    import json
     import time
 
-    import pandas as pd
-
     from src.discovery.build_dict import run_build_dict
-    from src.discovery.classify import run_classify
-    from src.discovery.corpus import load_full_sentences
+    from src.discovery.pipeline import discovery_corpus, file_meta, get_classified
     from src.discovery.rank import run_rank
-    from src.discovery.split import load_seeds, run_split
+    from src.discovery.split import load_seeds
     from src.scoring import load_dictionaries
 
     t0 = time.perf_counter()
-    corpus = _discovery_corpus(cfg)
+    corpus = discovery_corpus(cfg)
     print(f"[discover] corpus = {corpus}")
-    cached = cached_classify(cfg, corpus)
-    if cached is None:
-        if corpus == "full":
-            sents = load_full_sentences(cfg, force=cfg.get("force", False))
-        else:
-            cfg["settings"]["sample_mode"] = True  # the sample cache is keyed on sample settings
-            sents = pd.read_parquet(ensure_sentences(cfg, "discover"))
-        R, S = run_split(cfg, sents)
-        scored = run_classify(cfg, R, S)
-        (cfg["paths"]["cache"] / "discovery" / "classify_manifest.json").write_text(json.dumps(
-            {"corpus": corpus, "n_files": int(sents["file"].nunique()), "n_R": len(R), "n_S": len(S)},
-            indent=2), encoding="utf-8")
-    else:
-        R, S, scored = cached
-        print(f"[discover] task 2.1: {len(load_seeds(cfg))} seeds loaded from config")
-    ranked = run_rank(cfg, S, scored, force=cfg.get("force", False))
+    print(f"[discover] task 2.1: {len(load_seeds(cfg))} seeds loaded from config")
+    rough = _rough_if_needed(cfg)
+    R, S, scored = get_classified(cfg, corpus, _corpus_loader(cfg, corpus), rough)
+    tickers = S["file"].map(file_meta(cfg)["ticker"]).to_numpy()
+    ranked = run_rank(cfg, S, scored, force=cfg.get("force", False), tickers=tickers,
+                      N=rough["N"] if rough else None)
     authors = load_dictionaries(cfg, verbose=False, which="authors")["cc"]
     run_build_dict(cfg, ranked, authors)
     print(f"[discover] done in {time.perf_counter() - t0:.1f}s")
@@ -279,6 +237,23 @@ def stage_discover_eval(cfg: dict) -> None:
 
     authors = load_dictionaries(cfg, verbose=False, which="authors")["cc"]
     run_eval(cfg, authors, load_c_discovered(cfg), load_ranked(cfg))
+
+
+def stage_discover_variants(cfg: dict) -> None:
+    """Task 3.1 evaluation: run 2.2-2.6 for each config discovery_variants entry (A-D) and compare.
+
+    -> outputs/discovery_variants.csv, outputs/vocab_shift.csv, outputs/human_check_top100.csv.
+    Classifiers run once per M definition (cached); scoring uses the 200-transcript sample.
+    """
+    import pandas as pd
+
+    from src.discovery.pipeline import discovery_corpus
+    from src.discovery.variants import run_variants
+
+    corpus = discovery_corpus(cfg)
+    scfg = {**cfg, "settings": {**cfg["settings"], "sample_mode": True}}
+    run_variants(cfg, corpus, _corpus_loader(cfg, corpus),
+                 lambda: pd.read_parquet(ensure_sentences(scfg, "discover_variants")))
 
 
 def stage_compare_dicts(cfg: dict) -> None:
@@ -309,6 +284,12 @@ def stage_compare_dicts(cfg: dict) -> None:
     print(f"[compare_dicts] -> {out} (+ compare_dicts_firmyear.csv)")
 
 
+def stage_rough(cfg: dict) -> None:
+    """Task 3.1 steps 1-2: IPCC rough library C_R minus normal text N -> cache/discovery/rough_bigrams.pkl."""
+    from src.discovery.rough_library import load_rough_library
+    load_rough_library(cfg, force=cfg.get("force", False))
+
+
 def stage_validate(cfg: dict) -> None:
     print("[validate] not implemented yet (Phase 4)")
 
@@ -319,8 +300,10 @@ STAGES = {
     "check_xom": stage_check_xom,
     "compare_official": stage_compare_official,
     "isin_gap": stage_isin_gap,
+    "rough": stage_rough,
     "discover": stage_discover,
     "discover_eval": stage_discover_eval,
+    "discover_variants": stage_discover_variants,
     "compare_dicts": stage_compare_dicts,
     "validate": stage_validate,
 }

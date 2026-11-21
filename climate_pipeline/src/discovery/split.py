@@ -1,8 +1,9 @@
 """Discovery tasks 2.1-2.2: seeds and the R/S split (ROADMAP section 3, step 3).
 
-PROTOTYPE: M = all sentences in cache/sentences.parquet, no rough library. The paper first
-restricts M to sentences containing an IPCC "rough library" bigram (steps 1-2); that is
-Phase 3 (task 3.1).
+M = the sentences split here. discovery.use_rough_library: false -> PROTOTYPE, M = all
+sentences of the corpus; true -> M = sentences with >= 1 IPCC rough-library bigram (task 3.1,
+src.discovery.rough_library; the caller filters before run_split). Each M definition has its
+own cache folder (discovery_dir), so both can be kept side by side.
 
 R = sentences of M containing >= 1 seed bigram, S = all other sentences. A sentence's bigrams
 come from the shared cleaner (src.preprocess.make_vectorizer), the same one used for scoring.
@@ -17,11 +18,23 @@ import pandas as pd
 from src.preprocess import make_vectorizer
 
 PROTOTYPE_NOTE = "PROTOTYPE: M = all sentences, no rough library"
+ROUGH_NOTE = "M = sentences with >= 1 rough-library bigram (task 3.1)"
 OUT_COLS = ["file", "sentence_id", "sentence"]
 
 
+def uses_rough(cfg: dict) -> bool:
+    return bool(cfg["discovery"].get("use_rough_library", False))
+
+
+def m_note(cfg: dict) -> str:
+    return ROUGH_NOTE if uses_rough(cfg) else PROTOTYPE_NOTE
+
+
 def discovery_dir(cfg: dict) -> Path:
+    """cache/discovery (M = all sentences) or cache/discovery/m_rough (M = rough-library sentences)."""
     d = Path(cfg["paths"]["cache"]) / "discovery"
+    if uses_rough(cfg):
+        d = d / "m_rough"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -54,8 +67,8 @@ def split_rs(sents: pd.DataFrame, seeds: list[str]):
 
 
 def run_split(cfg: dict, sents: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Tasks 2.1 + 2.2 on the sentence cache: report seeds, split, save R/S parquet."""
-    print(f"[discover] {PROTOTYPE_NOTE}  (|M| = {len(sents):,} sentences, "
+    """Tasks 2.1 + 2.2 on M (already filtered by the caller): report seeds, split, save R/S parquet."""
+    print(f"[discover] {m_note(cfg)}  (|M| = {len(sents):,} sentences, "
           f"{sents['file'].nunique()} transcripts)")
     seeds = load_seeds(cfg)
     print(f"[discover] task 2.1: {len(seeds)} seeds loaded from config "
