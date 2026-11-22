@@ -47,7 +47,6 @@ Spearman rho with 95% bootstrap CIs (1,000 resamples of firm-years) and gain vs 
 
 Interpretation: besides the authors' dictionary, D2 beats seeds only with a CI that excludes zero, but stays below the authors'. Discovery needs corpus scale (the authors trained on ~60k climate
 sentences from the full call universe; we have ~2k in R from 21 firms).
-- Human check of the top-100 discovered bigrams: **not filled yet** (placeholder).
 
 **Vocabulary shift (fig 3).** 41.8% of climate (T) sentences are from 2021 or later.
 Bigrams such as net zero, carbon capture, energy transition and scope emission are central to

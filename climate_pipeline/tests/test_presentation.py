@@ -92,3 +92,4 @@ def test_write_summary_without_pinned_subset(tmp_path):
     assert "149 matched firm-years, 21 firms" in txt
     assert "Robustness" not in txt and "14-firm" not in txt
     assert "D2 beats seeds only" in txt
+    assert "Human check" not in txt

@@ -332,7 +332,7 @@ def _f(x, d=3):
 
 
 def write_summary(path: Path, ctx: dict) -> None:
-    t1, boot, dv, rs, prec = ctx["t1"], ctx["boot"], ctx["dv"], ctx["rs"], ctx["prec"]
+    t1, boot, dv, rs = ctx["t1"], ctx["boot"], ctx["dv"], ctx["rs"]
 
     def t1v(m, s, c):
         return float(t1[(t1["measure"] == m) & (t1["stat"] == s)][c].iloc[0])
@@ -351,11 +351,6 @@ def write_summary(path: Path, ctx: dict) -> None:
         f"| {bv(v, 'gain_vs_S0'):+.3f} [{bv(v, 'gain_ci_lo'):+.3f}, {bv(v, 'gain_ci_hi'):+.3f}] |"
         for v in boot["variant"])
     tq = float(dv.loc[dv["variant"] == "A", "T_quality_ratio"].iloc[0])
-    if prec is None:
-        hc_line = "- Human check of the top-100 discovered bigrams: **not filled yet** (placeholder)."
-    else:
-        parts = ", ".join(f"{r.group} {r.precision:.0%} (n={r.n_labelled})" for r in prec.itertuples())
-        hc_line = f"- Human check, precision@100: {parts}."
     n_fy, n_firms = ctx["n_matched"], ctx["n_matched_firms"]
     ba = ctx["boot_all"]
 
@@ -421,7 +416,6 @@ Spearman rho with 95% bootstrap CIs ({ctx['n_boot']:,} resamples of firm-years) 
 {ctx['robust']}
 {interp} Discovery needs corpus scale (the authors trained on ~60k climate
 sentences from the full call universe; we have ~2k in R from {ctx['n_firms']} firms).
-{hc_line}
 
 **Vocabulary shift (fig 3).** {ctx['base']:.1%} of climate (T) sentences are from 2021 or later.
 Bigrams such as net zero, carbon capture, energy transition and scope emission are central to
