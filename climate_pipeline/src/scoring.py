@@ -41,6 +41,8 @@ RISK_CURATED = RISK_NARROW | {
     "probable", "possible", "likelihood", "chance", "vary", "variable",
 }
 RISK_LISTS = ("narrow", "curated", "lm_unc")  # lm_unc = narrow | whole LM Uncertainty list
+# Risk-list sensitivity (full-corpus scoring): <m>_risk_<list> for every list, side by side.
+RISK_VARIANT_COLS = [f"{m}_risk_{r}" for m in MEASURES for r in RISK_LISTS]
 
 
 def load_pkl_set(path) -> frozenset[str]:
@@ -86,8 +88,17 @@ def load_lm_words() -> dict[str, frozenset[str]]:
     }
 
 
-def load_lexicons(cfg: dict, verbose: bool = True) -> dict[str, frozenset[str]]:
+def risk_word_lists(lm: dict[str, frozenset[str]]) -> dict[str, frozenset[str]]:
+    """The three Eq. 3 risk vocabularies, keyed by RISK_LISTS name."""
+    return {"narrow": RISK_NARROW, "curated": frozenset(RISK_CURATED),
+            "lm_unc": frozenset(RISK_NARROW | lm["unc"])}
+
+
+def load_lexicons(cfg: dict, verbose: bool = True, all_risk_lists: bool = False) -> dict:
     """{"pos", "neg", "risk"} word sets for Eq. 2-3; risk list from settings.risk_list.
+
+    all_risk_lists=True also adds "risk_variants" = {list name: words} for all three lists,
+    so transcript_parts writes <m>_risk_<list> columns next to <m>_risk (the config default).
 
     NOTE (known limitation, kept on purpose to match the old script): transcript words
     are spaCy lemmas, but the LM words are NOT lemmatized, so inflected LM entries
@@ -97,12 +108,18 @@ def load_lexicons(cfg: dict, verbose: bool = True) -> dict[str, frozenset[str]]:
     if choice not in RISK_LISTS:
         raise ValueError(f"settings.risk_list must be one of {RISK_LISTS}, got {choice!r}")
     lm = load_lm_words()
-    risk = {"narrow": RISK_NARROW, "curated": RISK_CURATED,
-            "lm_unc": RISK_NARROW | lm["unc"]}[choice]
+    lists = risk_word_lists(lm)
+    risk = lists[choice]
     if verbose:
         print(f"[score] risk_list = {choice} ({len(risk)} words); "
               f"LM pos={len(lm['pos'])}, neg={len(lm['neg'])}")
-    return {"pos": lm["pos"], "neg": lm["neg"], "risk": frozenset(risk)}
+    out = {"pos": lm["pos"], "neg": lm["neg"], "risk": frozenset(risk)}
+    if all_risk_lists:
+        out["risk_variants"] = lists
+        if verbose:
+            print("[score] risk-list sensitivity: also scoring "
+                  + ", ".join(f"{k} ({len(v)} words)" for k, v in lists.items()))
+    return out
 
 
 def transcript_parts(sentences: list[str], dicts: dict[str, frozenset[str]],
@@ -122,6 +139,8 @@ def transcript_parts(sentences: list[str], dicts: dict[str, frozenset[str]],
         # per sentence: does it contain a pos / neg / risk word? (words = s.split(), as old)
         words = [set(s.split()) for s in sentences]
         has = {k: np.array([bool(w & lex[k]) for w in words], dtype=bool) for k in ("pos", "neg", "risk")}
+        variants = lex.get("risk_variants") or {}
+        has_var = {r: np.array([bool(w & ws) for w in words], dtype=bool) for r, ws in variants.items()}
     col_tot = np.asarray(M.sum(axis=0)).ravel() if M is not None else np.array([])
     for m in MEASURES:
         D = dicts.get(m, ())
@@ -131,6 +150,7 @@ def transcript_parts(sentences: list[str], dicts: dict[str, frozenset[str]],
             rec[f"{m}_expo"] = np.nan
             if lex is not None:
                 rec.update({f"{m}_{s}": np.nan for s in TONE_SUFFIXES})
+                rec.update({f"{m}_risk_{r}": np.nan for r in has_var})
             continue
         hits = np.asarray(M @ member).ravel()  # climate bigrams per sentence (exact ints)
         rec[f"{m}_expo"] = int(hits.sum()) / B
@@ -140,6 +160,8 @@ def transcript_parts(sentences: list[str], dicts: dict[str, frozenset[str]],
             rec[f"{m}_neg"] = -neg / B  # stored NEGATIVE, matching the authors
             rec[f"{m}_sent"] = (pos - neg) / B
             rec[f"{m}_risk"] = risk / B
+            for r, h in has_var.items():
+                rec[f"{m}_risk_{r}"] = int(hits[h].sum()) / B
     return rec, counts
 
 
@@ -195,7 +217,7 @@ def score_sentences_df(sent_df: pd.DataFrame, dicts: dict, lex: dict | None = No
 def firm_year(scores_df: pd.DataFrame) -> pd.DataFrame:
     """Firm-year score = mean of the quarterly transcript scores by (ticker, isin, year)."""
     keys = ["ticker", "isin", "year"]
-    cols = [c for c in SCORE_COLS if c in scores_df]
+    cols = [c for c in SCORE_COLS + RISK_VARIANT_COLS if c in scores_df]
     g = scores_df.groupby(keys, dropna=False, sort=True)
     out = g[cols].mean()
     out["n_transcripts"] = g.size()

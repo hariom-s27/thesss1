@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.scoring import MEASURES
+from src.scoring import MEASURES, RISK_LISTS
 
 SUFFIXES = ("expo", "pos", "neg", "sent", "risk")
 PAIRS = [(f"{m}_{s}", f"{m}_{s}_ew") for m in MEASURES for s in SUFFIXES]
@@ -42,24 +42,39 @@ def compare_table(merged: pd.DataFrame) -> pd.DataFrame:
     n counts firm-years where both values are non-missing; the ratio uses only those
     with official != 0 (n_ratio). Correlations are NaN when n < 3 or a side is constant.
     """
+    return pd.DataFrame([{"measure": o, **_pair_stats(merged, o, e)}
+                         for o, e in PAIRS if o in merged and e in merged])
+
+
+def _pair_stats(merged: pd.DataFrame, ours_c: str, off_c: str) -> dict:
+    """n, Pearson, Spearman, median ratio (official != 0), n_ratio, means for one column pair."""
+    d = merged[[ours_c, off_c]].astype(float).dropna()
+    x, y = d[ours_c], d[off_c]
+    ok = len(d) >= 3 and x.nunique() > 1 and y.nunique() > 1
+    nz = y != 0
+    return {
+        "n": len(d),
+        "pearson": x.corr(y) if ok else np.nan,
+        "spearman": x.corr(y, method="spearman") if ok else np.nan,
+        "median_ratio": (x[nz] / y[nz]).median() if nz.any() else np.nan,
+        "n_ratio": int(nz.sum()),
+        "mean_ours": x.mean(),
+        "mean_official": y.mean(),
+    }
+
+
+def risk_sensitivity(merged: pd.DataFrame) -> pd.DataFrame:
+    """Our <m>_risk_<list> vs official <m>_risk_ew: one row per (measure, risk list).
+
+    Needs the <m>_risk_<list> columns written by full-corpus scoring (RISK_VARIANT_COLS).
+    """
     rows = []
-    for ours_c, off_c in PAIRS:
-        if ours_c not in merged or off_c not in merged:
-            continue
-        d = merged[[ours_c, off_c]].astype(float).dropna()
-        x, y = d[ours_c], d[off_c]
-        ok = len(d) >= 3 and x.nunique() > 1 and y.nunique() > 1
-        nz = y != 0
-        rows.append({
-            "measure": ours_c,
-            "n": len(d),
-            "pearson": x.corr(y) if ok else np.nan,
-            "spearman": x.corr(y, method="spearman") if ok else np.nan,
-            "median_ratio": (x[nz] / y[nz]).median() if nz.any() else np.nan,
-            "n_ratio": int(nz.sum()),
-            "mean_ours": x.mean(),
-            "mean_official": y.mean(),
-        })
+    for m in MEASURES:
+        off_c = f"{m}_risk_ew"
+        for r in RISK_LISTS:
+            ours_c = f"{m}_risk_{r}"
+            if ours_c in merged and off_c in merged:
+                rows.append({"measure": f"{m}_risk", "risk_list": r, **_pair_stats(merged, ours_c, off_c)})
     return pd.DataFrame(rows)
 
 

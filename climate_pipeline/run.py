@@ -1,7 +1,7 @@
 """Single entry point for the climate-exposure pipeline.
 
 Usage:
-    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|all> [--sample] [--force] [--config PATH]
+    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|all> [--sample] [--full] [--force] [--config PATH]
 """
 from __future__ import annotations
 
@@ -93,26 +93,42 @@ def ensure_sentences(cfg: dict, tag: str) -> Path:
     return sent_path
 
 
-def stage_score(cfg: dict) -> None:
-    """Eq. (1)-(4): cache/sentences.parquet -> cache/scores_transcript.parquet + outputs/scores_firmyear.csv."""
+def score_inputs(cfg: dict):
+    """(sentences, transcript-cache path, firm-year csv path, all_risk_lists) for stage score.
+
+    --sample: the 200-transcript cache (cache/sentences.parquet) -> scores_firmyear.csv.
+    full:     the discovery full-corpus cache (cache/discovery/sentences_full.parquet, reused,
+              never re-lemmatized when its manifest matches) -> scores_firmyear_full.csv,
+              with <m>_risk_<list> for all three risk lists (risk-list sensitivity).
+    """
     import pandas as pd
 
+    if cfg["settings"]["sample_mode"]:
+        sents = pd.read_parquet(ensure_sentences(cfg, "score"))
+        return sents, "scores_transcript.parquet", "scores_firmyear.csv", False
+    from src.discovery.corpus import load_full_sentences
+    sents = load_full_sentences(cfg, force=cfg.get("force", False))
+    return sents, "scores_transcript_full.parquet", "scores_firmyear_full.csv", True
+
+
+def stage_score(cfg: dict) -> None:
+    """Eq. (1)-(4) -> cache/scores_transcript[_full].parquet + outputs/scores_firmyear[_full].csv."""
     from src.io_utils import load_isin_map
     from src.scoring import firm_year, load_dictionaries, load_lexicons, score_sentences_df
 
-    sent_path = ensure_sentences(cfg, "score")
-
+    sents, t_name, f_name, all_risk = score_inputs(cfg)
+    print(f"[score] corpus = {'sample' if cfg['settings']['sample_mode'] else 'full'}: "
+          f"{sents['file'].nunique()} transcripts, {len(sents):,} sentences")
     dicts = load_dictionaries(cfg)
-    lex = load_lexicons(cfg)
-    sents = pd.read_parquet(sent_path)
-    scores = score_sentences_df(sents, dicts, lex)
+    lex = load_lexicons(cfg, all_risk_lists=all_risk)
+    scores = score_sentences_df(sents, dicts, lex, log_every=50 if len(sents) < 2_000_000 else 100)
     isin = load_isin_map(cfg)  # read fresh so newly added ISINs are picked up
     scores.insert(2, "isin", scores["ticker"].map(lambda t: isin.get(str(t).upper())))
 
-    out_t = cfg["paths"]["cache"] / "scores_transcript.parquet"
+    out_t = cfg["paths"]["cache"] / t_name
     scores.to_parquet(out_t, index=False)
     fy = firm_year(scores)
-    out_f = cfg["paths"]["outputs"] / "scores_firmyear.csv"
+    out_f = cfg["paths"]["outputs"] / f_name
     out_f.parent.mkdir(parents=True, exist_ok=True)
     fy.to_csv(out_f, index=False)
     print(f"[score] {len(scores)} transcripts -> {out_t}")
@@ -141,21 +157,29 @@ def stage_check_xom(cfg: dict) -> None:
 
 
 def stage_compare_official(cfg: dict) -> None:
-    """outputs/scores_firmyear.csv vs official csv on (isin, year) -> outputs/compare_official.csv."""
+    """outputs/scores_firmyear.csv vs official csv on (isin, year) -> outputs/compare_official.csv.
+
+    --full: outputs/scores_firmyear_full.csv -> outputs/compare_official_full.csv, plus the
+    risk-list sensitivity table -> outputs/risk_list_sensitivity.csv.
+    """
     import pandas as pd
 
     from src.validation.compare_official import (GAP_MEASURE, compare_table, largest_gaps,
-                                                 load_official_all, merge_official)
+                                                 load_official_all, merge_official,
+                                                 risk_sensitivity)
 
-    ours_path = cfg["paths"]["outputs"] / "scores_firmyear.csv"
+    full = cfg.get("full", False)
+    ours_path = cfg["paths"]["outputs"] / ("scores_firmyear_full.csv" if full else "scores_firmyear.csv")
     if not ours_path.exists():
-        raise FileNotFoundError(f"{ours_path} missing: run --stage score first")
+        raise FileNotFoundError(f"{ours_path} missing: run --stage score "
+                                f"{'(without --sample)' if full else '--sample'} first")
+    print(f"[compare_official] ours = {ours_path.name}")
     ours = pd.read_csv(ours_path)
     merged = merge_official(ours, load_official_all(cfg["paths"]["official_scores"]))
     print(f"[compare_official] {len(ours)} firm-years ours, {int(ours['isin'].notna().sum())} with ISIN, "
           f"{len(merged)} matched official on (isin, year), {merged['isin'].nunique()} firms")
     tab = compare_table(merged)
-    out = cfg["paths"]["outputs"] / "compare_official.csv"
+    out = cfg["paths"]["outputs"] / ("compare_official_full.csv" if full else "compare_official.csv")
     tab.to_csv(out, index=False)
     with pd.option_context("display.width", 200):
         print(tab.to_string(index=False, formatters={
@@ -164,6 +188,23 @@ def stage_compare_official(cfg: dict) -> None:
         print(f"\n[compare_official] 5 largest |ours - official| gaps on {GAP_MEASURE}:")
         print(largest_gaps(merged).to_string(index=False, float_format="{:.6f}".format))
     print(f"[compare_official] -> {out}")
+    rs = risk_sensitivity(merged)
+    if full and len(rs):
+        out_rs = cfg["paths"]["outputs"] / "risk_list_sensitivity.csv"
+        rs.to_csv(out_rs, index=False)
+        print(f"\n[compare_official] risk-list sensitivity (ours <m>_risk_<list> vs official "
+              f"<m>_risk_ew; config default = {cfg['settings'].get('risk_list')}):")
+        with pd.option_context("display.width", 200):
+            print(rs.to_string(index=False, formatters={
+                "pearson": "{:.3f}".format, "spearman": "{:.3f}".format,
+                "median_ratio": "{:.3f}".format, "mean_ours": "{:.6f}".format,
+                "mean_official": "{:.6f}".format}))
+        best = rs.groupby("risk_list")[["pearson", "spearman"]].mean()
+        print("[compare_official] mean over the 4 measures:")
+        print(best.to_string(float_format="{:.3f}".format))
+        print(f"[compare_official] best fit: Pearson -> {best['pearson'].idxmax()}, "
+              f"Spearman -> {best['spearman'].idxmax()}")
+        print(f"[compare_official] -> {out_rs}")
 
 
 def stage_isin_gap(cfg: dict) -> None:
@@ -317,6 +358,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="run on a small sample (settings.sample_size transcripts)")
     parser.add_argument("--force", action="store_true",
                         help="rebuild cache/*.parquet even if they already exist")
+    parser.add_argument("--full", action="store_true",
+                        help="compare_official: use the full-corpus scores (scores_firmyear_full.csv)")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to config.yaml")
     return parser.parse_args(argv)
 
@@ -327,6 +370,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.sample:
         cfg["settings"]["sample_mode"] = True
     cfg["force"] = args.force
+    cfg["full"] = args.full
 
     s = cfg["settings"]
     print(f"sample_mode={s['sample_mode']} sample_size={s['sample_size']} "
