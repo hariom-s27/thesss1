@@ -437,6 +437,11 @@ recent calls but absent from the authors' pre-2021 dictionary.
 """
     path.write_text(txt, encoding="utf-8")
     print(f"[presentation] -> {path.name}")
+    out = path.parent.parent
+    if (out / "dictionary_drift.csv").exists() and (out / "new_terms.csv").exists():
+        from src.validation.drift import drift_paragraph, update_summary
+        update_summary(path, drift_paragraph(pd.read_csv(out / "dictionary_drift.csv"),
+                                             pd.read_csv(out / "new_terms.csv")))
 
 
 # ---- stage ---------------------------------------------------------------------------------

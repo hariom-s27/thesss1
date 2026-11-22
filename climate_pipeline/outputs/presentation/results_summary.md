@@ -52,6 +52,8 @@ sentences from the full call universe; we have ~2k in R from 21 firms).
 Bigrams such as net zero, carbon capture, energy transition and scope emission are central to
 recent calls but absent from the authors' pre-2021 dictionary.
 
+**Dictionary drift (fig 6).** 103 discovered bigrams (variant C2, >= 3 firms, >= 10 T sentences) are not in the authors' cc dictionary. Adding them to it, new terms supply 44.4% of climate bigram hits before 2021 and 47.2% from 2021 on, raising mean firm-year cc_expo by 78% and 91%; the gap is mostly a stable level from 2013 on, not a post-2021 jump. By sector the share is 57% in oil & gas, 46% in utilities and 14% in autos. This is coverage the fixed dictionary misses, not a better score (the official scores use the old dictionary), and an upper bound: the list still holds generic terms (most hits: value proposition, low carbon, benefit customer, billion capital) pending a human check.
+
 **Deviations from the paper.**
 - LinearSVC + probability calibration instead of kernel SVC.
 - Ratio-matched training sample (S sample = 1.667 x |R|, the paper's 100k/60k ratio).

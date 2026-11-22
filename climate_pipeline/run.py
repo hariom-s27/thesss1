@@ -1,7 +1,7 @@
 """Single entry point for the climate-exposure pipeline.
 
 Usage:
-    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|presentation|all> [--sample] [--full] [--force] [--config PATH]
+    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|discover_variants_full|drift|compare_dicts|validate|presentation|all> [--sample] [--full] [--force] [--config PATH]
 """
 from __future__ import annotations
 
@@ -337,6 +337,25 @@ def stage_presentation(cfg: dict) -> None:
     run_presentation(cfg)
 
 
+def _full_loader(cfg: dict):
+    from src.discovery.corpus import load_full_sentences
+    return lambda: load_full_sentences(cfg, force=False)
+
+
+def stage_discover_variants_full(cfg: dict) -> None:
+    """Discovery variants (cached dictionaries) scored on the FULL corpus vs official, bootstrap
+    CIs -> outputs/discovery_variants_full.csv, presentation/bootstrap_gains_full.csv + fig."""
+    from src.validation.full_eval import run_full_eval
+    run_full_eval(cfg, _full_loader(cfg))
+
+
+def stage_drift(cfg: dict) -> None:
+    """Dictionary drift: authors' cc vs authors' cc + NEW_TERMS by year / period / sector
+    -> outputs/new_terms.csv, outputs/dictionary_drift.csv, presentation/fig6_dictionary_drift.png."""
+    from src.validation.drift import run_drift
+    run_drift(cfg, _full_loader(cfg))
+
+
 def stage_validate(cfg: dict) -> None:
     print("[validate] not implemented yet (Phase 4)")
 
@@ -352,6 +371,8 @@ STAGES = {
     "discover_eval": stage_discover_eval,
     "discover_variants": stage_discover_variants,
     "compare_dicts": stage_compare_dicts,
+    "discover_variants_full": stage_discover_variants_full,
+    "drift": stage_drift,
     "validate": stage_validate,
     "presentation": stage_presentation,
 }
