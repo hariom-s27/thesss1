@@ -213,7 +213,6 @@ discovery_variants:
 presentation:
   n_boot: 1000            # bootstrap resamples of firm-years (fig 2, bootstrap_gains.csv)
   seed: 42                # bootstrap RNG seed
-  # discovery_variants.csv was written before 7 ISINs (COP D DAL HON MMM OXY SO) were added to
-  # ticker_isin_map.json, so its correlations use these 14 firms (96 sample firm-years). Fig 2
-  # uses this set to reproduce the csv; bootstrap_gains.csv also reports all ISINs (149).
-  fig2_tickers: [BA, CAT, CVX, DUK, F, GM, JPM, KO, MSFT, NEE, PFE, UNH, WMT, XOM]
+  # Optional: restrict fig 2 / bootstrap to these tickers (empty or missing = all firms with an
+  # ISIN; discovery_variants.csv uses all firms, so leave empty to reproduce it).
+  fig2_tickers: []

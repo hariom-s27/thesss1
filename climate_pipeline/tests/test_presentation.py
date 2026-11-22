@@ -58,3 +58,37 @@ def test_table1_reshapes_compare_official():
     assert list(t.columns) == ["measure", "stat", "n", "pearson", "spearman", "median_ratio"]
     assert t[(t.measure == "cc") & (t.stat == "risk")]["pearson"].iloc[0] == 0.68
     assert len(t) == 3
+
+
+def test_fig2_uses_all_firms_by_default():
+    """discovery_variants.csv now covers every firm with an ISIN: no pinned fig 2 subset."""
+    from pathlib import Path
+    from run import load_config
+    cfg = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+    assert not cfg.get("presentation", {}).get("fig2_tickers")
+
+
+def test_write_summary_without_pinned_subset(tmp_path):
+    from src.presentation import write_summary
+    variants = ["S0", "A", "D2", "authors"]
+    boot = pd.DataFrame({"variant": variants, "n": 149,
+                         "spearman": [0.67, 0.68, 0.77, 0.84],
+                         "spearman_ci_lo": [0.55, 0.56, 0.68, 0.75],
+                         "spearman_ci_hi": [0.76, 0.78, 0.84, 0.89],
+                         "gain_vs_S0": [0.0, 0.01, 0.10, 0.17],
+                         "gain_ci_lo": [0.0, -0.09, 0.04, 0.08],
+                         "gain_ci_hi": [0.0, 0.13, 0.17, 0.25]})
+    t1 = pd.DataFrame([{"measure": m, "stat": s, "pearson": 0.9, "spearman": 0.8, "median_ratio": 0.7}
+                       for m in ("cc", "op", "rg", "ph") for s in ("expo", "pos", "risk")])
+    rs = pd.DataFrame([{"measure": m, "risk_list": l, "pearson": 0.5}
+                       for m in ("cc_risk", "op_risk", "rg_risk") for l in ("narrow", "curated", "lm_unc")])
+    dv = pd.DataFrame({"variant": ["A"], "T_quality_ratio": [27.0]})
+    p = tmp_path / "s.md"
+    write_summary(p, {"t1": t1, "boot": boot, "boot_all": None, "dv": dv, "rs": rs, "prec": None,
+                      "base": 0.4, "n_boot": 1000, "n_transcripts": 1508, "n_firms": 21, "y0": 2005,
+                      "y1": 2026, "n_matched": 362, "n_firms_all_isin": 21, "n_matched_firms": 21,
+                      "n_fig2_firms": 21})
+    txt = p.read_text(encoding="utf-8")
+    assert "149 matched firm-years, 21 firms" in txt
+    assert "Robustness" not in txt and "14-firm" not in txt
+    assert "D2 beats seeds only" in txt

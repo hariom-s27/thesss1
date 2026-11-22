@@ -362,11 +362,23 @@ def write_summary(path: Path, ctx: dict) -> None:
     def ba_v(v, c):
         return float(ba.loc[ba["variant"] == v, c].iloc[0])
 
-    ctx["robust"] = (f"Robustness: with all {ctx['n_firms_all_isin']} firms now mapped to ISINs "
-                     f"({int(ba['n'].iloc[0])} sample firm-years) rho is S0 {_f(ba_v('S0','spearman'))}, "
-                     f"{best} {_f(ba_v(best,'spearman'))} (gain {ba_v(best,'gain_vs_S0'):+.3f} "
-                     f"[{ba_v(best,'gain_ci_lo'):+.3f}, {ba_v(best,'gain_ci_hi'):+.3f}]), authors "
-                     f"{_f(ba_v('authors','spearman'))}.")
+    if ba is None:
+        ctx["robust"] = ""
+    else:
+        ctx["robust"] = (f"\nRobustness: with all {ctx['n_firms_all_isin']} firms mapped to ISINs "
+                         f"({int(ba['n'].iloc[0])} sample firm-years) rho is S0 {_f(ba_v('S0','spearman'))}, "
+                         f"{best} {_f(ba_v(best,'spearman'))} (gain {ba_v(best,'gain_vs_S0'):+.3f} "
+                         f"[{ba_v(best,'gain_ci_lo'):+.3f}, {ba_v(best,'gain_ci_hi'):+.3f}]), authors "
+                         f"{_f(ba_v('authors','spearman'))}.\n")
+    sig = [v for v in disc if bv(v, "gain_ci_lo") > 0]
+    if sig:
+        names = ", ".join(sig)
+        interp = (f"Interpretation: besides the authors' dictionary, {names} beat"
+                  f"{'s' if len(sig) == 1 else ''} seeds only with a CI that excludes zero, but "
+                  f"stay{'s' if len(sig) == 1 else ''} below the authors'.")
+    else:
+        interp = ("Interpretation: only the authors' dictionary beats seeds only with a CI that "
+                  "excludes zero.")
     txt = f"""# Climate-exposure replication: results summary
 
 Rebuild of Sautner, van Lent, Vilkov & Zhang (2023, JF) as one pipeline (seeds -> discovery
@@ -396,9 +408,9 @@ risk are not recovered by any list.
 |---|---|---|---|
 {rs_rows}
 
-**Discovery (fig 2; 200-transcript sample, {int(boot['n'].iloc[0])} matched firm-years).**
+**Discovery (fig 2; 200-transcript sample, {int(boot['n'].iloc[0])} matched firm-years, {ctx['n_fig2_firms']} firms).**
 The classifiers find genuinely climate-heavy sentences (T holds {tq:.0f}x more authors'
-bigrams per sentence than the rest of S), but on the sample the discovered dictionaries
+bigrams per sentence than the rest of S), but on the sample most discovered dictionaries
 barely beat the 50 seeds: seeds only rho = {_f(bv('S0','spearman'))}, authors' dictionary
 {_f(bv('authors','spearman'))}, our best variant ({best}) {_f(bv(best,'spearman'))}.
 Spearman rho with 95% bootstrap CIs ({ctx['n_boot']:,} resamples of firm-years) and gain vs S0:
@@ -406,17 +418,13 @@ Spearman rho with 95% bootstrap CIs ({ctx['n_boot']:,} resamples of firm-years) 
 | variant | rho [95% CI] | gain vs S0 [95% CI] |
 |---|---|---|
 {boot_rows}
-
 {ctx['robust']}
-
-Interpretation: on the 14-firm set used for variant selection, only the authors' dictionary
-beats seeds only with a CI that excludes zero; with all 21 firms the small firm-filtered
-dictionary ({best}) also does, but stays below the authors'. Discovery needs corpus scale (the authors trained on ~60k climate sentences
-from the full call universe; we have ~2k in R from 21 firms).
+{interp} Discovery needs corpus scale (the authors trained on ~60k climate
+sentences from the full call universe; we have ~2k in R from {ctx['n_firms']} firms).
 {hc_line}
 
 **Vocabulary shift (fig 3).** {ctx['base']:.1%} of climate (T) sentences are from 2021 or later.
-Bigrams such as net zero, carbon capture, energy security and scope emission are central to
+Bigrams such as net zero, carbon capture, energy transition and scope emission are central to
 recent calls but absent from the authors' pre-2021 dictionary.
 
 **Deviations from the paper.**
@@ -482,9 +490,12 @@ def run_presentation(cfg: dict) -> dict:
                              f"{ref[v]:.6f} (check presentation.fig2_tickers)")
     print(f"[presentation] fig 2: rescored Spearman matches discovery_variants.csv for all "
           f"{len(boot)} variants (n = {len(fyv)} firm-years, {fyv['ticker'].nunique()} firms)")
-    boot_all, _ = bootstrap_spearman(fyv_all, FIG2_VARIANTS, "cc_expo_ew", "S0", n_boot, seed)
-    both = pd.concat([boot.assign(firm_set=f"as_discovery_variants_{fyv['ticker'].nunique()}_firms"),
-                      boot_all.assign(firm_set=f"all_isins_{fyv_all['ticker'].nunique()}_firms")])
+    parts = [boot.assign(firm_set=f"as_discovery_variants_{fyv['ticker'].nunique()}_firms")]
+    boot_all = None
+    if keep:  # a pinned subset: also report all firms with an ISIN
+        boot_all, _ = bootstrap_spearman(fyv_all, FIG2_VARIANTS, "cc_expo_ew", "S0", n_boot, seed)
+        parts.append(boot_all.assign(firm_set=f"all_isins_{fyv_all['ticker'].nunique()}_firms"))
+    both = pd.concat(parts)
     both = both[["firm_set", *boot.columns]]
     both.to_csv(pres / "bootstrap_gains.csv", index=False)
     print(f"[presentation] -> bootstrap_gains.csv")
@@ -521,7 +532,8 @@ def run_presentation(cfg: dict) -> dict:
         "t1": t1, "boot": boot, "boot_all": boot_all, "dv": dv, "rs": rs, "prec": prec, "base": base, "n_boot": n_boot,
         "n_transcripts": int(scores["n_transcripts"].sum()), "n_firms": scores["ticker"].nunique(),
         "y0": int(scores["year"].min()), "y1": int(scores["year"].max()),
-        "n_matched": len(merged), "n_firms_all_isin": fyv_all["ticker"].nunique(), "n_matched_firms": merged["ticker"].nunique(),
+        "n_matched": len(merged), "n_firms_all_isin": fyv_all["ticker"].nunique(),
+        "n_fig2_firms": fyv["ticker"].nunique(), "n_matched_firms": merged["ticker"].nunique(),
     })
     with pd.option_context("display.width", 200):
         print("\n[presentation] bootstrap (Spearman vs official, 200-transcript sample):")

@@ -1,0 +1,7 @@
+"""Make `src` and `run` importable whether pytest runs from the repo root or climate_pipeline/."""
+import sys
+from pathlib import Path
+
+PIPELINE_DIR = Path(__file__).resolve().parents[1]
+if str(PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(PIPELINE_DIR))
