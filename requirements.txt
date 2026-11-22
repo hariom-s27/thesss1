@@ -1,4 +1,5 @@
 pdfplumber
+pymupdf
 spacy
 nltk
 scikit-learn
@@ -6,3 +7,8 @@ pandas
 numpy
 requests
 pysentiment2
+pyyaml
+pytest
+scipy
+pyarrow
+matplotlib

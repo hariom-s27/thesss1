@@ -1,0 +1,218 @@
+# climate_pipeline configuration — ALL paths and settings live here.
+# Relative paths are resolved against this file's folder (climate_pipeline/).
+
+paths:
+  # External data (outside repo, read-only)
+  authors_dictionaries: "D:/sem_iitk/sem9/thesis/old _work/code/jofi13219-sup-0002-replicationcode/Replication Files Sautner et al. (2023)/B. Figure 1 2, Table 2, and IA Table 6 7 8 9 11/bigrams"
+  pdf_dir: "D:/sem_iitk/sem9/thesis/old _work/transcript"            # .pdf transcripts (pdfplumber)
+  official_scores: "D:/sem_iitk/sem9/thesis/old _work/csv/firmyear_score_2024Q4_Version_2025_Jul_03.csv"
+  transcript_dir: "D:/sem_iitk/sem9/thesis/api_transcripts"   # .txt transcripts read by the preprocess stage
+
+  ticker_isin_map: "../ticker_isin_map.json"                         # repo root
+
+  # Internal working folders
+  data: "data"
+  ipcc_dir: "data/ipcc"   # IPCC report PDFs for the rough library (task 3.1)
+  cache: "cache"
+  outputs: "outputs"
+
+settings:
+  sample_mode: false      # overridden to true by `run.py --sample`
+  sample_size: 200        # number of transcripts used in sample mode
+  sample_seed: 42         # fixed seed for the firm-spread random sample
+  chunk_size: 50000       # sentences per batch for chunked processing
+  dictionary: authors     # authors | discovered
+  pdf_ticker: XOM         # every PDF in pdf_dir is this firm (used only by --stage check_xom)
+  pdf_isin: US30231G1022  # ISIN of pdf_ticker (matches official_scores)
+  risk_list: curated      # Eq. 3 risk words: narrow | curated | lm_unc (see src/scoring.py)
+
+# Authors' dictionary files inside paths.authors_dictionaries
+dictionaries:
+  cc: bigrams_07222021.pkl        # CCExposure
+  op: opportunity_bigrams_4.pkl   # CCExposureOpp
+  rg: regulatory_bigrams_4.pkl    # CCExposureReg
+  ph: physical_bigrams_4.pkl      # CCExposurePhy
+
+# ---- Discovery (Phase 2) ----------------------------------------------------
+# Table IA.III: the 50 initial (seed) bigrams, copied EXACTLY from
+# week1_thesis/phase5_validation_suite.py (published typos kept: "exterme weather",
+# "costal region", "global warm").
+seeds:
+  - "air pollution"
+  - "electric vehicle"
+  - "new energy"
+  - "air quality"
+  - "energy climate"
+  - "ozone layer"
+  - "air temperature"
+  - "energy conversion"
+  - "renewable energy"
+  - "biomass energy"
+  - "energy efficient"
+  - "sea level"
+  - "carbon dioxide"
+  - "energy environment"
+  - "sea water"
+  - "carbon emission"
+  - "environmental sustainability"
+  - "snow ice"
+  - "carbon energy"
+  - "exterme weather"
+  - "solar energy"
+  - "carbon neutral"
+  - "flue gas"
+  - "solar thermal"
+  - "carbon price"
+  - "forest land"
+  - "sustainable energy"
+  - "carbon sink"
+  - "gas emission"
+  - "water resource"
+  - "carbon tax"
+  - "ghg emission"
+  - "water resources"
+  - "clean air"
+  - "global decarbonization"
+  - "wave energy"
+  - "clean energy"
+  - "global warm"
+  - "weather climate"
+  - "clean water"
+  - "greenhouse gas"
+  - "wind energy"
+  - "climate change"
+  - "heat power"
+  - "wind power"
+  - "coastal area"
+  - "kyoto protocol"
+  - "wind resource"
+  - "costal region"
+  - "natural hazard"
+
+# Table IA.IV: topic initial bigrams (used in Phase 3, task 3.3).
+topic_seeds:
+  opp:
+    - "heat power"
+    - "new energy"
+    - "renewable energy"
+    - "wind power"
+    - "electric vehicle"
+    - "clean energy"
+    - "wind energy"
+    - "solar energy"
+    - "plug hybrid"
+    - "renewable resource"
+    - "solar farm"
+    - "rooftop solar"
+    - "sustainable energy"
+    - "hybrid car"
+    - "renewable electricity"
+    - "wave power"
+    - "geothermal power"
+    - "electric hybrid"
+  reg:
+    - "greenhouse gas"
+    - "reduce emission"
+    - "carbon emission"
+    - "carbon dioxide"
+    - "gas emission"
+    - "air pollution"
+    - "reduce carbon"
+    - "carbon tax"
+    - "carbon price"
+    - "emission trade"
+    - "dioxide emission"
+    - "environmental standard"
+    - "epa regulation"
+    - "energy regulatory"
+    - "nox emission"
+    - "carbon reduction"
+    - "carbon market"
+    - "mercury emission"
+    - "energy independence"
+  phy:
+    - "coastal area"
+    - "global warm"
+    - "snow ice"
+    - "forest land"
+    - "sea level"
+    - "nickel metal"
+    - "storm water"
+    - "heavy snow"
+    - "air water"
+    - "natural hazard"
+    - "sea water"
+    - "warm climate"
+    - "water discharge"
+    - "ice product"
+
+discovery:
+  corpus: full            # full | sample. `--stage discover` uses this; `--stage discover --sample`
+                          # always uses the 200-transcript scoring cache (quick test).
+  n_workers: 6            # processes for lemmatizing the full corpus (cache/discovery/sentences_full.parquet)
+  min_df: 3               # classifier features: bigrams in >= 3 training sentences
+  # Training set = all of R + |S_train| random S sentences, with
+  # |S_train| = min(round(s_train_ratio * |R|), |S|, s_train_max). The paper's R ~ 60k and
+  # S sample = 100k; the 100k is a corpus-size artefact, the RATIO is what we keep.
+  s_train_ratio: 1.667    # = 100,000 / 60,000 from the paper (R ~ 37.5% of the training set)
+  s_train_max: 100000
+  oof_folds: 5            # S_train sentences are scored out-of-fold (cross_val_predict, k folds)
+  t_threshold: 0.8        # T = S sentences with max(P_nb, P_svc, P_rf) > t_threshold
+  # Task 2.4 ranking (src/discovery/rank.py)
+  min_t_only_df: 3        # T-only bigrams kept if in >= 3 T sentences (paper keeps all T-only, but
+                          # had already dropped bigrams with frequency < 10 at preprocessing)
+  top_pct: 0.05           # shared bigrams with prop_T > prop_ST: keep the top 5% by King score
+
+  # ---- Task 3.1: rough library, set M, candidate filters (src/discovery/rough_library.py) ----
+  use_rough_library: false     # true -> M = sentences with >= 1 rough bigram (paper, IA I steps 1-2);
+                               # false -> PROTOTYPE, M = all sentences (variant A)
+  rough_min_freq: 10           # C_R: IPCC bigrams with total frequency >= this
+  n_min_freq: 2                # N: normal-text bigrams with total frequency >= this
+  n_corpora: [gutenberg, reuters, brown]   # NLTK corpora used as "normal text" N
+  rough_clean: true            # true -> cleaned rough library (task 3.1b, rough_bigrams_clean.pkl);
+                               # false -> the task-3.1 library (rough_bigrams.pkl, variants B/C/D)
+  rough_cleaning:              # rough library only; never applied to transcripts or scoring
+    drop_citation_lines: true  # drop PDF lines with et al / doi / http / ISBN / author-year citations
+    drop_digits: true          # remove digit-only tokens before forming IPCC bigrams (paper IA I)
+    token_validity: true       # OUR ADDITION: both words in N unigram vocab OR >= min_transcript_count
+    min_transcript_count: 5    #   times in the transcript corpus (drops names, garbled PDF text)
+  rough_n_workers: 6           # processes for lemmatizing IPCC + N (results do not depend on it)
+  ipcc_extract_workers: 2      # processes for PDF text extraction
+  ipcc_extractor: pymupdf      # engine for pages NOT yet extracted (pdfplumber | pymupdf). Pages already
+                               # in cache keep their engine. pdfplumber needed >5 GB per worker and
+                               # ~10 s per page on AR5 WG1, so the last ~2,100 pages use PyMuPDF.
+  filter_candidates_by_N: false  # N2: drop candidate bigrams in N before ranking. OUR
+                               # INTERPRETATION for a small corpus (the paper uses N only for the
+                               # rough library)
+  min_firms_in_T: 3            # F: keep a candidate only if its T sentences come from >= this many
+                               # distinct tickers (0/1 = off). DEVIATION for a 21-firm corpus.
+                               # Only used when apply_firm_filter is true.
+  apply_firm_filter: false
+  # Evaluation (stage discover_variants)
+  vocab_shift_year: 2021       # vocabulary-shift check: T occurrences before vs from this year
+  vocab_shift_min_nkT: 10      # only bigrams with >= this many T sentences are listed
+  vocab_shift_min_firms: 3     # ... and with T sentences from >= this many tickers (drops exec names)
+  best_variant: auto           # auto = highest spearman_gain_vs_seeds (Spearman vs official minus
+                               # the seeds-only S0 Spearman); or a variant name
+  best_min_discovered: 100     # auto only considers variants with >= this many discovered bigrams
+                               # (the human-check sheet has 100 rows)
+
+# Stage `discover_variants`: each variant overrides these discovery keys, then runs 2.2-2.6.
+# Variants that share the M definition share the classifier run (cached per M).
+discovery_variants:
+  S0: {seeds_only: true}   # baseline: dictionary = the 50 seeds, no discovery (paper Figure 2 logic)
+  A:  {use_rough_library: false, filter_candidates_by_N: false, apply_firm_filter: false}  # prototype
+  B:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: false, apply_firm_filter: false}  # 3.1 rough library
+  C:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: true,  apply_firm_filter: false}  # B + N2
+  D:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: true,  apply_firm_filter: true}   # C + F
+  B2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: false, apply_firm_filter: false}  # cleaned rough library
+  C2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: true,  apply_firm_filter: false}  # B2 + N2
+  D2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: true,  apply_firm_filter: true}   # C2 + F
+
+# ---- Stage `presentation` (src/presentation.py): figures + summary from existing outputs ----
+presentation:
+  n_boot: 1000            # bootstrap resamples of firm-years (fig 2, bootstrap_gains.csv)
+  seed: 42                # bootstrap RNG seed
+  # Optional: restrict fig 2 / bootstrap to these tickers (empty or missing = all firms with an
+  # ISIN; discovery_variants.csv uses all firms, so leave empty to reproduce it).
+  fig2_tickers: []
