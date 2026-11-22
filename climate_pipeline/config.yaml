@@ -169,7 +169,18 @@ discovery:
   rough_min_freq: 10           # C_R: IPCC bigrams with total frequency >= this
   n_min_freq: 2                # N: normal-text bigrams with total frequency >= this
   n_corpora: [gutenberg, reuters, brown]   # NLTK corpora used as "normal text" N
+  rough_clean: true            # true -> cleaned rough library (task 3.1b, rough_bigrams_clean.pkl);
+                               # false -> the task-3.1 library (rough_bigrams.pkl, variants B/C/D)
+  rough_cleaning:              # rough library only; never applied to transcripts or scoring
+    drop_citation_lines: true  # drop PDF lines with et al / doi / http / ISBN / author-year citations
+    drop_digits: true          # remove digit-only tokens before forming IPCC bigrams (paper IA I)
+    token_validity: true       # OUR ADDITION: both words in N unigram vocab OR >= min_transcript_count
+    min_transcript_count: 5    #   times in the transcript corpus (drops names, garbled PDF text)
   rough_n_workers: 6           # processes for lemmatizing IPCC + N (results do not depend on it)
+  ipcc_extract_workers: 2      # processes for PDF text extraction
+  ipcc_extractor: pymupdf      # engine for pages NOT yet extracted (pdfplumber | pymupdf). Pages already
+                               # in cache keep their engine. pdfplumber needed >5 GB per worker and
+                               # ~10 s per page on AR5 WG1, so the last ~2,100 pages use PyMuPDF.
   filter_candidates_by_N: false  # N2: drop candidate bigrams in N before ranking. OUR
                                # INTERPRETATION for a small corpus (the paper uses N only for the
                                # rough library)
@@ -180,14 +191,20 @@ discovery:
   # Evaluation (stage discover_variants)
   vocab_shift_year: 2021       # vocabulary-shift check: T occurrences before vs from this year
   vocab_shift_min_nkT: 10      # only bigrams with >= this many T sentences are listed
-  best_variant: auto           # auto = highest mean(Pearson, Spearman) vs official; or A/B/C/D
+  vocab_shift_min_firms: 3     # ... and with T sentences from >= this many tickers (drops exec names)
+  best_variant: auto           # auto = highest spearman_gain_vs_seeds (Spearman vs official minus
+                               # the seeds-only S0 Spearman); or a variant name
   best_min_discovered: 100     # auto only considers variants with >= this many discovered bigrams
                                # (the human-check sheet has 100 rows)
 
 # Stage `discover_variants`: each variant overrides these discovery keys, then runs 2.2-2.6.
 # Variants that share the M definition share the classifier run (cached per M).
 discovery_variants:
-  A: {use_rough_library: false, filter_candidates_by_N: false, apply_firm_filter: false}  # prototype
-  B: {use_rough_library: true,  filter_candidates_by_N: false, apply_firm_filter: false}  # paper-faithful
-  C: {use_rough_library: true,  filter_candidates_by_N: true,  apply_firm_filter: false}  # B + N2
-  D: {use_rough_library: true,  filter_candidates_by_N: true,  apply_firm_filter: true}   # C + F
+  S0: {seeds_only: true}   # baseline: dictionary = the 50 seeds, no discovery (paper Figure 2 logic)
+  A:  {use_rough_library: false, filter_candidates_by_N: false, apply_firm_filter: false}  # prototype
+  B:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: false, apply_firm_filter: false}  # 3.1 rough library
+  C:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: true,  apply_firm_filter: false}  # B + N2
+  D:  {use_rough_library: true, rough_clean: false, filter_candidates_by_N: true,  apply_firm_filter: true}   # C + F
+  B2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: false, apply_firm_filter: false}  # cleaned rough library
+  C2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: true,  apply_firm_filter: false}  # B2 + N2
+  D2: {use_rough_library: true, rough_clean: true,  filter_candidates_by_N: true,  apply_firm_filter: true}   # C2 + F

@@ -31,10 +31,11 @@ def m_note(cfg: dict) -> str:
 
 
 def discovery_dir(cfg: dict) -> Path:
-    """cache/discovery (M = all sentences) or cache/discovery/m_rough (M = rough-library sentences)."""
+    """cache/discovery (M = all sentences), cache/discovery/m_rough (M = task-3.1 rough-library
+    sentences) or cache/discovery/m_rough_clean (M = cleaned task-3.1b rough library)."""
     d = Path(cfg["paths"]["cache"]) / "discovery"
     if uses_rough(cfg):
-        d = d / "m_rough"
+        d = d / ("m_rough_clean" if cfg["discovery"].get("rough_clean", False) else "m_rough")
     d.mkdir(parents=True, exist_ok=True)
     return d
 

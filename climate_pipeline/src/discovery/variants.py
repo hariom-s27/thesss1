@@ -1,27 +1,33 @@
 """Task 3.1 evaluation: discovery variants side by side (stage `discover_variants`).
 
 Variants come from config `discovery_variants` (each overrides keys of `discovery`):
+  S0 seeds-only baseline: dictionary = the 50 seeds, no discovery (paper Figure 2 logic:
+     discovery must beat seeds-only)
   A  prototype: M = all sentences
-  B  + rough library (paper-faithful): M = sentences with >= 1 IPCC rough bigram
+  B  + rough library (task 3.1, uncleaned): M = sentences with >= 1 IPCC rough bigram
   C  = B + N2 (drop candidate bigrams in N before ranking)
   D  = C + F  (drop candidates seen in T sentences of < min_firms_in_T tickers)
+  B2/C2/D2 = B/C/D with the cleaned task-3.1b rough library (discovery.rough_clean: true)
 
 For each variant: 2.2-2.3 (cached per M definition, src.discovery.pipeline), 2.4 ranking,
 2.5 dictionary, 2.6 metrics, and Eq. 1 scoring of the 200-transcript sample with the
 variant's C. Metrics in outputs/discovery_variants.csv:
   M, R, S, T, T_quality_ratio, C, n_t_only, n_top_pct, precision@100, precision@500,
   reachable_recall, mean_cc_expo (transcript mean on the sample), pearson / spearman vs the
-  official cc_expo_ew on matched firm-years (+ a reference row for the authors' dictionary).
+  official cc_expo_ew on matched firm-years (+ a reference row for the authors' dictionary),
+  M_share = |M| / corpus sentences, spearman_gain_vs_seeds = Spearman - S0 Spearman.
   reachable_recall uses ONE denominator for all variants: the authors' bigrams that occur
   anywhere in the corpus (so a smaller M cannot inflate it).
 Precision vs the authors' list is a weak metric (their list holds noise too); correlation with
 the official scores and the human check are the main ones.
 
-Best variant (discovery.best_variant; auto = highest mean of Pearson and Spearman among the
+Best variant (discovery.best_variant; auto = highest spearman_gain_vs_seeds among the
 variants with >= discovery.best_min_discovered discovered bigrams, so the 100-row human-check
-sheet can be filled; correlations of a near-seeds-only dictionary say little about discovery):
+sheet can be filled):
   outputs/vocab_shift.csv          per discovered bigram: T sentences before / from
-                                   discovery.vocab_shift_year (thesis: post-2020 vocabulary)
+                                   discovery.vocab_shift_year and n_firms_T; the printed top 20
+                                   keeps bigrams with >= vocab_shift_min_firms tickers (drops
+                                   executive names such as "ketchum chairman")
   outputs/human_check_top100.csv   rank, bigram, source, n_kT, n_firms, 3 example T sentences
                                    (lemmatized), is_climate (empty, to fill by hand)
 """
@@ -42,9 +48,11 @@ from src.discovery.rank import (FIRM_COL, candidate_exclusions, filter_params, l
 from src.discovery.split import load_seeds, uses_rough
 from src.preprocess import make_vectorizer
 
-TABLE_COLS = ["variant", "description", "M", "R", "S", "T", "T_quality_ratio", "C", "n_t_only",
-              "n_top_pct", "n_discovered", "precision@100", "precision@500", "reachable_recall", "mean_cc_expo",
-              "pearson_official", "spearman_official", "n_matched"]
+TABLE_COLS = ["variant", "description", "M", "M_share", "R", "S", "T", "T_quality_ratio", "C",
+              "n_t_only", "n_top_pct", "n_discovered", "precision@100", "precision@500",
+              "reachable_recall", "mean_cc_expo", "pearson_official", "spearman_official",
+              "spearman_gain_vs_seeds", "n_matched"]
+SEEDS_ONLY = "S0"
 
 
 # ---- pure helpers ------------------------------------------------------------------------
@@ -58,8 +66,11 @@ def variant_cfg(cfg: dict, overrides: dict) -> dict:
 
 
 def describe(vcfg: dict) -> str:
+    if vcfg["discovery"].get("seeds_only", False):
+        return "seeds only (no discovery)"
     use_N, min_f = filter_params(vcfg)
-    parts = ["M=rough" if uses_rough(vcfg) else "M=all"]
+    rough = "M=rough_clean" if vcfg["discovery"].get("rough_clean", False) else "M=rough"
+    parts = [rough if uses_rough(vcfg) else "M=all"]
     if use_N:
         parts.append("N2")
     if min_f > 1:
@@ -67,17 +78,27 @@ def describe(vcfg: dict) -> str:
     return " + ".join(parts)
 
 
+def add_seed_gain(table: pd.DataFrame, baseline: str = SEEDS_ONLY) -> pd.DataFrame:
+    """spearman_gain_vs_seeds = Spearman vs official minus the seeds-only baseline's (NaN without it)."""
+    t = table.copy()
+    b = t.loc[t["variant"] == baseline, "spearman_official"]
+    t["spearman_gain_vs_seeds"] = t["spearman_official"] - (b.iloc[0] if len(b) else np.nan)
+    return t
+
+
 def pick_best(table: pd.DataFrame, choice: str = "auto", min_discovered: int = 0) -> str:
-    """Highest mean(Pearson, Spearman) vs official among variants with >= min_discovered
-    discovered bigrams (all variants if none qualifies), or the configured variant."""
+    """Highest spearman_gain_vs_seeds (= highest Spearman vs official) among discovery variants
+    with >= min_discovered discovered bigrams (all of them if none qualifies), or the configured
+    variant. The authors' row and the seeds-only baseline are never picked."""
     if choice != "auto":
         if choice not in set(table["variant"]):
             raise ValueError(f"best_variant {choice!r} not among {list(table['variant'])}")
         return choice
-    v = table[table["variant"] != "authors"].copy()
+    v = table[~table["variant"].isin(["authors", SEEDS_ONLY])].copy()
     if "n_discovered" in v and (v["n_discovered"] >= min_discovered).any():
         v = v[v["n_discovered"] >= min_discovered]
-    v["_s"] = v[["pearson_official", "spearman_official"]].mean(axis=1)
+    key = "spearman_gain_vs_seeds" if "spearman_gain_vs_seeds" in v else "spearman_official"
+    v["_s"] = v[key].fillna(v["spearman_official"])
     return str(v.sort_values("_s", ascending=False, kind="stable")["variant"].iloc[0])
 
 
@@ -105,8 +126,13 @@ def vocab_shift(X, feats, in_T, years, bigrams, split_year: int) -> tuple[pd.Dat
     return out, float(base)
 
 
-def top_shift(shift: pd.DataFrame, split_year: int, min_nkT: int, k: int = 20) -> pd.DataFrame:
+def top_shift(shift: pd.DataFrame, split_year: int, min_nkT: int, k: int = 20,
+              min_firms: int = 0) -> pd.DataFrame:
+    """Bigrams most concentrated from split_year on, with >= min_nkT T sentences and (when the
+    table has n_firms_T) T sentences from >= min_firms tickers."""
     sc = f"share_{split_year}plus"
+    if min_firms > 1:
+        shift = shift[shift[FIRM_COL] >= min_firms]
     return (shift[shift["n_kT"] >= min_nkT]
             .sort_values([sc, "n_kT", "bigram"], ascending=[False, False, True], kind="stable")
             .head(k).reset_index(drop=True))
@@ -208,27 +234,45 @@ def run_variants(cfg: dict, corpus: str, load_sents, load_sample) -> pd.DataFram
             memo["s"] = load_sents()
         return memo["s"]
 
-    rough = load_rough_library(cfg)
+    roughs: dict = {}
+
+    def rough_for(vcfg):
+        """The rough library a variant uses (task 3.1 or cleaned 3.1b), built once each."""
+        k = bool(vcfg["discovery"].get("rough_clean", False))
+        if k not in roughs:
+            roughs[k] = load_rough_library(vcfg)
+        return roughs[k]
+
     authors = load_dictionaries(cfg, verbose=False, which="authors")["cc"]
     vocab = corpus_vocab(cfg, corpus, sents)
     meta = file_meta(cfg)
     sample = load_sample()
     isin_map = load_isin_map(cfg)
     official = load_official_all(cfg["paths"]["official_scores"], verbose=False)
-    print(f"[variants] corpus = {corpus}; scoring sample = {sample['file'].nunique()} transcripts; "
-          f"variants: {', '.join(variants)}")
+    n_corpus = len(sents())
+    print(f"[variants] corpus = {corpus} ({n_corpus:,} sentences); scoring sample = "
+          f"{sample['file'].nunique()} transcripts; variants: {', '.join(variants)}")
 
     rows, kept = [], {}
     for name, over in variants.items():
         vcfg = variant_cfg(cfg, over)
         print(f"\n[variants] ===== variant {name}: {describe(vcfg)} =====")
+        if vcfg["discovery"].get("seeds_only", False):
+            mean_cc, pr, sp, n = _sample_scores(sample, seeds, isin_map, official)
+            rows.append({"variant": name, "description": describe(vcfg), "C": len(seeds),
+                         "n_discovered": 0, "mean_cc_expo": mean_cc, "pearson_official": pr,
+                         "spearman_official": sp, "n_matched": n})
+            print(f"[variants] {name}: |C| = {len(seeds)} seeds  r(official) = {pr:.3f} / rho = {sp:.3f}")
+            continue
+        rough = rough_for(vcfg) if (uses_rough(vcfg) or filter_params(vcfg)[0]) else None
         R, S, scored = get_classified(vcfg, corpus, sents, rough if uses_rough(vcfg) else None)
         in_T = scored["in_T"].to_numpy()
         X, feats = load_s_bigrams(vcfg, S)
         tickers = S["file"].map(meta["ticker"]).to_numpy(dtype=object)
         use_N, min_f = filter_params(vcfg)
         ranked, info = rank_from_matrix(X, feats, in_T, min_t, top_pct,
-                                        exclude=candidate_exclusions(seeds, rough["N"], use_N),
+                                        exclude=candidate_exclusions(seeds, rough["N"] if rough else None,
+                                                                     use_N),
                                         tickers=tickers, min_firms=min_f)
         C = build_dictionary(ranked, seeds)
         disc = ranked_discovered(ranked, seeds)
@@ -240,7 +284,7 @@ def run_variants(cfg: dict, corpus: str, load_sents, load_sample) -> pd.DataFram
         with open(vdir / f"{name}_C.pkl", "wb") as f:
             pickle.dump(C, f)
         rows.append({"variant": name, "description": describe(vcfg), "M": len(R) + len(S),
-                     "R": len(R), "S": len(S), "T": info["N_T"], "T_quality_ratio": tq["ratio"],
+                     "M_share": (len(R) + len(S)) / max(n_corpus, 1), "R": len(R), "S": len(S), "T": info["N_T"], "T_quality_ratio": tq["ratio"],
                      "C": len(C), "n_t_only": info["n_t_only"], "n_top_pct": info["n_top_pct"],
                      "n_discovered": len(disc), "precision@100": p[100], "precision@500": p[500],
                      "reachable_recall": rr["recall"], "mean_cc_expo": mean_cc,
@@ -254,12 +298,14 @@ def run_variants(cfg: dict, corpus: str, load_sents, load_sample) -> pd.DataFram
     rows.append({"variant": "authors", "description": "authors' cc dictionary (reference)",
                  "C": len(authors), "mean_cc_expo": mean_cc, "pearson_official": pr,
                  "spearman_official": sp, "n_matched": n})
-    table = pd.DataFrame(rows)[TABLE_COLS]
+    table = add_seed_gain(pd.DataFrame(rows).reindex(columns=TABLE_COLS))[TABLE_COLS]
     table.to_csv(out_dir / "discovery_variants.csv", index=False)
 
     fmt = {c: "{:,.0f}".format for c in ("M", "R", "S", "T", "C", "n_t_only", "n_top_pct", "n_discovered")}
     fmt.update({c: "{:.3f}".format for c in ("T_quality_ratio", "precision@100", "precision@500",
                                              "reachable_recall", "pearson_official", "spearman_official")})
+    fmt["spearman_gain_vs_seeds"] = "{:+.3f}".format
+    fmt["M_share"] = "{:.1%}".format
     fmt["mean_cc_expo"] = "{:.5f}".format
     with pd.option_context("display.width", 250, "display.max_columns", 30):
         print("\n[variants] variant comparison:")
@@ -267,6 +313,8 @@ def run_variants(cfg: dict, corpus: str, load_sents, load_sample) -> pd.DataFram
     print(f"[variants] -> {out_dir / 'discovery_variants.csv'}")
 
     for name, (*_, disc) in kept.items():
+        if disc.empty:
+            continue
         print(f"\n[variants] top 15 discovered bigrams, variant {name}:")
         cols = ["bigram", "source", "n_kT", "n_kST", FIRM_COL]
         print(disc[cols].head(15).rename(index=lambda i: i + 1).rename_axis("rank")
@@ -278,21 +326,25 @@ def run_variants(cfg: dict, corpus: str, load_sents, load_sample) -> pd.DataFram
     S, scored, X, feats, tickers, disc = kept[best]
     in_T = scored["in_T"].to_numpy()
     print(f"\n[variants] best variant = {best} (discovery.best_variant = {choice}"
-          + (f"; auto = highest mean(Pearson, Spearman) among variants with >= {min_disc} discovered "
+          + (f"; auto = highest spearman_gain_vs_seeds among variants with >= {min_disc} discovered "
              f"bigrams; without that floor it would be {raw})" if choice == "auto" else ")"))
 
     yr = int(dv.get("vocab_shift_year", 2021))
     years = S["file"].map(meta["year"]).astype(float).to_numpy()
     shift, base = vocab_shift(X, feats, in_T, years, disc["bigram"].tolist(), yr)
-    shift = shift.merge(disc[["bigram", "source"]], on="bigram", how="left")
+    shift = shift.merge(disc[["bigram", "source", FIRM_COL]], on="bigram", how="left")
+    shift.insert(0, "variant", best)
     shift.to_csv(out_dir / "vocab_shift.csv", index=False)
     min_n = int(dv.get("vocab_shift_min_nkT", 10))
-    top = top_shift(shift, yr, min_n)
+    min_fs = int(dv.get("vocab_shift_min_firms", 3))
+    top = top_shift(shift, yr, min_n, min_firms=min_fs).drop(columns="variant")
     sc = f"share_{yr}plus"
+    ok = (shift["n_kT"] >= min_n) & (shift[FIRM_COL] >= min_fs)
     print(f"[variants] vocabulary shift (variant {best}): {base:.1%} of all T sentences are from {yr}+; "
-          f"{int((shift['n_kT'] >= min_n).sum()):,} discovered bigrams have >= {min_n} T sentences; "
-          f"{int((shift.loc[shift['n_kT'] >= min_n, sc] == 1).sum()):,} of them occur ONLY from {yr}")
-    print(f"[variants] 20 discovered bigrams most concentrated in {yr}+ (n_kT >= {min_n}):")
+          f"{int(ok.sum()):,} discovered bigrams have >= {min_n} T sentences from >= {min_fs} firms; "
+          f"{int((shift.loc[ok, sc] == 1).sum()):,} of them occur ONLY from {yr}")
+    print(f"[variants] 20 discovered bigrams most concentrated in {yr}+ "
+          f"(n_kT >= {min_n}, >= {min_fs} firms):")
     print(top.rename(index=lambda i: i + 1).to_string(formatters={sc: "{:.1%}".format,
                                                                   "lift_vs_base": "{:.2f}".format}))
     print(f"[variants] -> {out_dir / 'vocab_shift.csv'}")
