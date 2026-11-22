@@ -1,7 +1,7 @@
 """Single entry point for the climate-exposure pipeline.
 
 Usage:
-    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|all> [--sample] [--full] [--force] [--config PATH]
+    python run.py --stage <preprocess|score|check_xom|compare_official|isin_gap|rough|discover|discover_eval|discover_variants|compare_dicts|validate|presentation|all> [--sample] [--full] [--force] [--config PATH]
 """
 from __future__ import annotations
 
@@ -331,6 +331,12 @@ def stage_rough(cfg: dict) -> None:
     load_rough_library(cfg, force=cfg.get("force", False))
 
 
+def stage_presentation(cfg: dict) -> None:
+    """Figures, tables and results_summary.md from existing outputs -> outputs/presentation/."""
+    from src.presentation import run_presentation
+    run_presentation(cfg)
+
+
 def stage_validate(cfg: dict) -> None:
     print("[validate] not implemented yet (Phase 4)")
 
@@ -347,6 +353,7 @@ STAGES = {
     "discover_variants": stage_discover_variants,
     "compare_dicts": stage_compare_dicts,
     "validate": stage_validate,
+    "presentation": stage_presentation,
 }
 ALL_ORDER = ["preprocess", "discover", "score", "validate"]
 
